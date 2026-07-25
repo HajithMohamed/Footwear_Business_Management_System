@@ -21,7 +21,43 @@ See [`MASTER_PROMPT.md`](MASTER_PROMPT.md) for the full product spec and the pha
 
 ---
 
-## Local setup
+## Run with Docker (recommended)
+
+The only requirement is Docker Desktop. One command builds PHP-Apache + MySQL 8,
+imports the schema and seed automatically, and serves the app:
+
+```bash
+docker compose up --build -d
+```
+
+Then open <http://localhost:8080> and sign in with **admin / admin123**.
+
+| | |
+|---|---|
+| App | <http://localhost:8080> (host `8080` → container `80`) |
+| MySQL | host port `3307` (→ container `3306`), db `footwear_erp`, user `footwear` / `footwear_secret`, root `root_secret` |
+| Uploads | persisted in the `uploads` volume |
+| Database | persisted in the `dbdata` volume |
+
+```bash
+docker compose logs -f app                    # follow app logs
+docker compose exec app php tests/run.php     # run the cost tests inside the container
+docker compose down                           # stop (keeps data)
+docker compose down -v                        # stop AND wipe the db + uploads volumes
+```
+
+Credentials and ports live in `docker-compose.yml`; the container generates its `.env`
+from those environment variables at startup (see `docker/entrypoint.sh`).
+
+> **Troubleshooting** — if `docker compose up --build` ever ends with
+> `failed to solve: image ... already exists` (a Docker Desktop/containerd
+> image-store quirk that occurs when the rebuilt image is byte-identical to an
+> existing one), the image is already built — just run `docker compose up -d`
+> to start it.
+
+---
+
+## Local setup (without Docker)
 
 **Requirements:** PHP 8.1+ (with `pdo_mysql` and `gd`), MySQL/MariaDB.
 

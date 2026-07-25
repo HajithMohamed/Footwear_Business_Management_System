@@ -1,0 +1,52 @@
+# Footwear Wholesale ERP — full stack (PHP-Apache + MySQL 8)
+#
+#   docker compose up --build      # start (first run imports schema + seed)
+#   open http://localhost:8080     # login: admin / admin123
+#   docker compose down            # stop  (add -v to also wipe the database)
+
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    environment:
+      APP_NAME: "Footwear Wholesale ERP"
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_URL: "http://localhost:8080"
+      APP_TIMEZONE: Asia/Colombo
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_NAME: footwear_erp
+      DB_USER: footwear
+      DB_PASS: footwear_secret
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - uploads:/var/www/html/public/uploads
+
+  db:
+    image: mysql:8
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root_secret
+      MYSQL_DATABASE: footwear_erp
+      MYSQL_USER: footwear
+      MYSQL_PASSWORD: footwear_secret
+    ports:
+      - "3307:3306"           # host 3307 avoids clashing with local MySQL on 3306
+    volumes:
+      - dbdata:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot_secret"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  dbdata:
+  uploads:
