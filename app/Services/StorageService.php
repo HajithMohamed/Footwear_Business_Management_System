@@ -1,0 +1,202 @@
+<?php
+
+namespace App\Services;
+
+/**
+ * Local file storage for product images (and, later, purchase documents).
+ *
+ * Files live under /public/uploads (a "protected uploads folder" — PHP
+ * execution is denied there via .htaccess). Images are validated by real MIME
+ * type, re-encoded (which strips EXIF), capped to a max edge, and given a
+ * generated thumbnail. Stored paths are relative to /public/uploads.
+ */
+class StorageService
+{
+    private string $diskRoot;
+
+    public function __construct()
+    {
+        $this->diskRoot = BASE_PATH . '/public/uploads';
+    }
+
+    /** Web URL for a stored relative path. */
+    public static function url(string $relativePath): string
+    {
+        return url('uploads/' . ltrim($relativePath, '/'));
+    }
+
+    /**
+     * Validate an uploaded image. Returns an error string or null if OK.
+     */
+    public function validateImage(array $file): ?string
+    {
+        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            return 'Upload failed. Please try again.';
+        }
+        $maxBytes = config('uploads.max_image_mb', 8) * 1024 * 1024;
+        if (($file['size'] ?? 0) > $maxBytes) {
+            return 'Image is too large (max ' . config('uploads.max_image_mb', 8) . ' MB).';
+        }
+        $mime = $this->detectMime($file['tmp_name']);
+        if (!in_array($mime, config('uploads.allowed_image_mimes', []), true)) {
+            return 'Only JPG, PNG or WEBP images are allowed.';
+        }
+        return null;
+    }
+
+    /**
+     * Store a product image (original + thumbnail).
+     *
+     * @return array{path:string,thumb_path:string,original_name:string}
+     */
+    public function storeProductImage(array $file, int $productId): array
+    {
+        $mime    = $this->detectMime($file['tmp_name']);
+        $ext     = $this->extForMime($mime);
+        $dirRel  = "products/{$productId}";
+        $origRel = "{$dirRel}/original";
+        $thumbRel = "{$dirRel}/thumb";
+        $this->ensureDir($origRel);
+        $this->ensureDir($thumbRel);
+
+        $filename  = bin2hex(random_bytes(16)) . '.' . $ext;
+        $origPath  = "{$origRel}/{$filename}";
+        $thumbPath = "{$thumbRel}/{$filename}";
+
+        $processed = $this->processImage(
+            $file['tmp_name'],
+            $mime,
+            $this->diskRoot . '/' . $origPath,
+            $this->diskRoot . '/' . $thumbPath
+        );
+
+        if (!$processed) {
+            // GD unavailable — fall back to storing the raw file safely.
+            move_uploaded_file($file['tmp_name'], $this->diskRoot . '/' . $origPath)
+                || copy($file['tmp_name'], $this->diskRoot . '/' . $origPath);
+            $thumbPath = $origPath;
+        }
+
+        return [
+            'path'          => $origPath,
+            'thumb_path'    => $thumbPath,
+            'original_name' => substr((string) ($file['name'] ?? 'image'), 0, 200),
+        ];
+    }
+
+    /** Delete a stored file (and its containing thumb if separate). */
+    public function delete(?string ...$relativePaths): void
+    {
+        foreach ($relativePaths as $rel) {
+            if (!$rel) {
+                continue;
+            }
+            $full = $this->diskRoot . '/' . ltrim($rel, '/');
+            if (is_file($full)) {
+                @unlink($full);
+            }
+        }
+    }
+
+    /** Remove a product's entire media folder (used on hard delete). */
+    public function deleteProductDir(int $productId): void
+    {
+        $this->rrmdir($this->diskRoot . "/products/{$productId}");
+    }
+
+    // --- internals -----------------------------------------------------------
+
+    private function detectMime(string $tmp): string
+    {
+        if (!is_file($tmp)) {
+            return '';
+        }
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mime  = finfo_file($finfo, $tmp) ?: '';
+        finfo_close($finfo);
+        return $mime;
+    }
+
+    private function extForMime(string $mime): string
+    {
+        return match ($mime) {
+            'image/png'  => 'png',
+            'image/webp' => 'webp',
+            'application/pdf' => 'pdf',
+            default      => 'jpg',
+        };
+    }
+
+    private function ensureDir(string $relative): void
+    {
+        $full = $this->diskRoot . '/' . $relative;
+        if (!is_dir($full)) {
+            mkdir($full, 0775, true);
+        }
+    }
+
+    /** Resize + re-encode original and thumbnail. Returns false if GD missing. */
+    private function processImage(string $srcTmp, string $mime, string $origDest, string $thumbDest): bool
+    {
+        if (!function_exists('imagecreatefromstring')) {
+            return false;
+        }
+        $data = file_get_contents($srcTmp);
+        $img  = @imagecreatefromstring($data);
+        if ($img === false) {
+            return false;
+        }
+
+        $maxEdge   = config('uploads.image_max_edge', 1600);
+        $thumbEdge = config('uploads.image_thumb_edge', 400);
+
+        $this->saveResized($img, $mime, $origDest, $maxEdge);
+        $this->saveResized($img, $mime, $thumbDest, $thumbEdge);
+
+        imagedestroy($img);
+        return true;
+    }
+
+    private function saveResized(\GdImage $src, string $mime, string $dest, int $maxEdge): void
+    {
+        $w = imagesx($src);
+        $h = imagesy($src);
+        $scale = min(1, $maxEdge / max($w, $h));
+        $nw = max(1, (int) round($w * $scale));
+        $nh = max(1, (int) round($h * $scale));
+
+        $dst = imagecreatetruecolor($nw, $nh);
+        if ($mime === 'image/png' || $mime === 'image/webp') {
+            imagealphablending($dst, false);
+            imagesavealpha($dst, true);
+        }
+        imagecopyresampled($dst, $src, 0, 0, 0, 0, $nw, $nh, $w, $h);
+
+        switch ($mime) {
+            case 'image/png':
+                imagepng($dst, $dest, 6);
+                break;
+            case 'image/webp':
+                imagewebp($dst, $dest, 82);
+                break;
+            default:
+                imagejpeg($dst, $dest, 82);
+        }
+        imagedestroy($dst);
+    }
+
+    private function rrmdir(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+        foreach (scandir($dir) ?: [] as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+            $path = $dir . '/' . $item;
+            is_dir($path) ? $this->rrmdir($path) : @unlink($path);
+        }
+        @rmdir($dir);
+    }
+}

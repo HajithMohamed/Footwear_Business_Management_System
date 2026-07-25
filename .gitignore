@@ -1,0 +1,20 @@
+# Environment
+.env
+
+# Storage (user uploads, logs) — keep the folders, ignore contents
+/storage/uploads/*
+!/storage/uploads/.gitkeep
+/storage/logs/*
+!/storage/logs/.gitkeep
+/storage/backups/*
+!/storage/backups/.gitkeep
+
+# Dependencies (only if Composer is ever used)
+/vendor/
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+.vscode/
