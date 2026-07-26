@@ -4,13 +4,19 @@ namespace App\Controllers;
 
 use App\Core\Controller;
 use App\Core\Request;
+use App\Models\ClearancePerson;
+use App\Models\GoodsArrival;
+use App\Models\Parcel;
 use App\Models\Product;
+use App\Models\Purchase;
 
 class DashboardController extends Controller
 {
     public function index(Request $request): void
     {
-        $products = new Product();
+        $products  = new Product();
+        $purchases = new Purchase();
+        $people    = new ClearancePerson();
 
         $this->view('dashboard/index', [
             'title' => 'Dashboard',
@@ -20,6 +26,17 @@ class DashboardController extends Controller
                 'out_of_stock'   => $products->outOfStockCount(),
             ],
             'lowStock' => $products->lowStockList(8),
+
+            // Module 5 — import purchase / clearance / arrival
+            'importStats'        => $purchases->stats(),
+            'awaitingClearance'  => $purchases->awaitingClearance(5),
+            'inTransit'          => $purchases->inTransit(5),
+            'recentlyArrived'    => $purchases->recentlyArrived(5),
+            'recentPurchases'    => $purchases->recent(5),
+            'pendingParcels'     => (new Parcel())->pendingVerification(5),
+            'pendingQuantity'    => (new GoodsArrival())->pendingQuantityVerification(5),
+            'byClearancePerson'  => $people->openShipments(),
+            'clearancePerf'      => $people->performance(5),
         ]);
     }
 }

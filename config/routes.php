@@ -45,6 +45,53 @@ return function (Router $r): void {
     $r->post('/customers/{customerId}/payment',      'PaymentController@store',  ['auth']);
     $r->get('/customers/{customerId}/payments',      'PaymentController@byCustomer', ['auth']);
 
+    // --- Module 5: Import Purchase, Clearance & Goods Arrival ---------------
+    // Purchases (static segments must stay ABOVE /purchases/{id})
+    $r->get('/purchases',         'PurchaseController@index',      ['auth']);
+    $r->get('/purchases/create',  'PurchaseController@create',     ['auth']);
+    $r->get('/purchases/import',  'PurchaseController@importForm', ['auth']);
+    $r->post('/purchases/import', 'PurchaseController@import',     ['auth']);
+    $r->post('/purchases',        'PurchaseController@store',      ['auth']);
+    $r->get('/purchases/{id}',    'PurchaseController@show',       ['auth']);
+
+    // Clearance assignment (many agents <-> many purchases)
+    $r->get('/purchases/{id}/assign-clearance',  'ClearanceAssignmentController@create', ['auth']);
+    $r->post('/purchases/{id}/assign-clearance', 'ClearanceAssignmentController@store',  ['auth']);
+    $r->post('/purchases/{id}/in-transit',       'ClearanceAssignmentController@markInTransit', ['auth']);
+    $r->post('/purchases/{id}/assignments/{assignmentId}/delete', 'ClearanceAssignmentController@destroy', ['auth']);
+
+    // Parcels
+    $r->post('/purchases/{id}/parcels',            'ParcelController@store',  ['auth']);
+    $r->post('/purchases/{id}/parcels/{parcelId}', 'ParcelController@update', ['auth']);
+
+    // Arrival verification -> inventory
+    $r->get('/arrivals',                        'ArrivalController@index',         ['auth']);
+    $r->post('/purchases/{id}/arrival/open',    'ArrivalController@open',          ['auth']);
+    $r->get('/purchases/{id}/arrival',          'ArrivalController@verify',        ['auth']);
+    $r->post('/purchases/{id}/arrival/counts',  'ArrivalController@saveCounts',    ['auth']);
+    $r->post('/purchases/{id}/arrival/count',   'ArrivalController@addCount',      ['auth']);
+    $r->post('/purchases/{id}/arrival/partial', 'ArrivalController@acceptPartial', ['auth']);
+    $r->post('/purchases/{id}/arrival/confirm', 'ArrivalController@confirm',       ['auth']);
+
+    // Phase 4: landed cost per pair (after arrival is confirmed)
+    $r->get('/purchases/{id}/costing',  'CostingController@show',  ['auth']);
+    $r->post('/purchases/{id}/costing', 'CostingController@store', ['auth']);
+
+    // Attachments + quick calculation notes
+    $r->post('/purchases/{id}/attachments', 'AttachmentController@store',     ['auth']);
+    $r->post('/attachments/{id}/delete',    'AttachmentController@destroy',   ['auth']);
+    $r->get('/notes',                       'AttachmentController@notes',     ['auth']);
+    $r->post('/notes',                      'AttachmentController@storeNote', ['auth']);
+    $r->post('/notes/{id}/attach',          'AttachmentController@attach',    ['auth']);
+
+    // Clearance persons (static segments must stay ABOVE /clearance-persons/{id})
+    $r->get('/clearance-persons',           'ClearancePersonController@index',  ['auth']);
+    $r->get('/clearance-persons/create',    'ClearancePersonController@create', ['auth']);
+    $r->post('/clearance-persons',          'ClearancePersonController@store',  ['auth']);
+    $r->get('/clearance-persons/{id}/edit', 'ClearancePersonController@edit',   ['auth']);
+    $r->get('/clearance-persons/{id}',      'ClearancePersonController@show',   ['auth']);
+    $r->post('/clearance-persons/{id}',     'ClearancePersonController@update', ['auth']);
+
     // --- Cheques (standalone dashboard) --------------------------------------
     $r->get('/cheques',                    'ChequeController@index',         ['auth']);
     $r->get('/cheques/pending',            'ChequeController@pending',       ['auth']);
@@ -56,6 +103,14 @@ return function (Router $r): void {
     $r->get('/intelligence/{classification}',      'LedgerController@byClassification', ['auth']);
     $r->get('/intelligence/top',                   'LedgerController@topCustomers', ['auth']);
     $r->get('/intelligence/overdue',               'LedgerController@overdue', ['auth']);
+
+    // --- Phase 5: Reports & accounting (read-only) ---------------------------
+    $r->get('/reports',             'ReportController@index',       ['auth']);
+    $r->get('/reports/stock',       'ReportController@stock',       ['auth']);
+    $r->get('/reports/imports',     'ReportController@imports',     ['auth']);
+    $r->get('/reports/clearance',   'ReportController@clearance',   ['auth']);
+    $r->get('/reports/costs',       'ReportController@costs',       ['auth']);
+    $r->get('/reports/receivables', 'ReportController@receivables', ['auth']);
 
     // --- Settings (admin only) ----------------------------------------------
     $r->get('/settings',  'SettingController@index',  ['auth', 'admin']);

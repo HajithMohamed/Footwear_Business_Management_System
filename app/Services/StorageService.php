@@ -12,6 +12,9 @@ namespace App\Services;
  */
 class StorageService
 {
+    /** Accepted for purchase documents (invoices, clearance docs, parcel photos, notes). */
+    private const DOCUMENT_MIMES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+
     private string $diskRoot;
 
     public function __construct()
@@ -82,6 +85,80 @@ class StorageService
             'thumb_path'    => $thumbPath,
             'original_name' => substr((string) ($file['name'] ?? 'image'), 0, 200),
         ];
+    }
+
+    /**
+     * Validate a purchase document (invoice PDF/photo, clearance doc, parcel photo,
+     * calculation note). Returns an error string or null if OK.
+     */
+    public function validateDocument(array $file): ?string
+    {
+        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            return 'Upload failed. Please try again.';
+        }
+        $maxMb    = (int) config('uploads.max_doc_mb', 20);
+        $maxBytes = $maxMb * 1024 * 1024;
+        if (($file['size'] ?? 0) > $maxBytes) {
+            return "File is too large (max {$maxMb} MB).";
+        }
+        $mime = $this->detectMime($file['tmp_name']);
+        if (!in_array($mime, self::DOCUMENT_MIMES, true)) {
+            return 'Only PDF, JPG, PNG or WEBP files are allowed.';
+        }
+        return null;
+    }
+
+    /**
+     * Store a purchase document. Unlike product images these are kept byte-for-byte:
+     * re-encoding a scan costs the detail that makes handwriting readable, and would
+     * corrupt a PDF outright. A separate thumbnail is generated for images only.
+     *
+     * $purchaseId may be null for a calculation note captured before it is attached.
+     *
+     * @return array{path:string,thumb_path:?string,original_name:string,mime_type:string,size_bytes:int}
+     */
+    public function storePurchaseDocument(array $file, ?int $purchaseId): array
+    {
+        $mime   = $this->detectMime($file['tmp_name']);
+        $ext    = $this->extForMime($mime);
+        $folder = $purchaseId === null ? 'unfiled' : (string) $purchaseId;
+        $dirRel = "purchases/{$folder}";
+        $this->ensureDir($dirRel);
+
+        $filename = bin2hex(random_bytes(16)) . '.' . $ext;
+        $pathRel  = "{$dirRel}/{$filename}";
+        $fullPath = $this->diskRoot . '/' . $pathRel;
+
+        if (!move_uploaded_file($file['tmp_name'], $fullPath)) {
+            copy($file['tmp_name'], $fullPath);
+        }
+
+        $thumbRel = null;
+        if ($mime !== 'application/pdf' && function_exists('imagecreatefromstring')) {
+            $thumbDirRel = "{$dirRel}/thumb";
+            $this->ensureDir($thumbDirRel);
+            $candidate = "{$thumbDirRel}/{$filename}";
+            $img = @imagecreatefromstring((string) file_get_contents($fullPath));
+            if ($img !== false) {
+                $this->saveResized($img, $mime, $this->diskRoot . '/' . $candidate, (int) config('uploads.image_thumb_edge', 400));
+                imagedestroy($img);
+                $thumbRel = $candidate;
+            }
+        }
+
+        return [
+            'path'          => $pathRel,
+            'thumb_path'    => $thumbRel,
+            'original_name' => substr((string) ($file['name'] ?? 'document'), 0, 200),
+            'mime_type'     => $mime,
+            'size_bytes'    => (int) ($file['size'] ?? 0),
+        ];
+    }
+
+    /** Absolute path on disk for a stored relative path (needed to read a file back). */
+    public function absolutePath(string $relativePath): string
+    {
+        return $this->diskRoot . '/' . ltrim($relativePath, '/');
     }
 
     /** Delete a stored file (and its containing thumb if separate). */

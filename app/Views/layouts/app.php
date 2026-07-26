@@ -98,9 +98,15 @@ $navActive = function (string $prefix) use ($currentPath): string {
           <a href="<?= e(url('calculator')) ?>" class="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3 hover:bg-slate-100">
             <span class="text-xl">🧮</span><span class="font-medium">Cost Calculator</span>
           </a>
-          <button type="button" @click="soon='New Invoice — arriving in Phase 3'" class="w-full flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3 text-slate-400 hover:bg-slate-100">
-            <span class="text-xl">🧾</span><span class="font-medium">New Invoice <em class="text-xs">(Phase 3)</em></span>
-          </button>
+          <a href="<?= e(url('purchases/import')) ?>" class="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3 hover:bg-slate-100">
+            <span class="text-xl">📦</span><span class="font-medium">Import Invoice</span>
+          </a>
+          <a href="<?= e(url('arrivals')) ?>" class="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3 hover:bg-slate-100">
+            <span class="text-xl">✅</span><span class="font-medium">Verify Arrival</span>
+          </a>
+          <a href="<?= e(url('notes')) ?>" class="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3 hover:bg-slate-100">
+            <span class="text-xl">🧮</span><span class="font-medium">Calculation Note</span>
+          </a>
           <p x-show="soon" x-transition style="display:none" class="rounded-lg bg-slate-800 px-3 py-2 text-center text-xs text-white" x-text="soon"></p>
           <button @click="open=false; soon=''" class="w-full mt-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-500">Close</button>
         </div>

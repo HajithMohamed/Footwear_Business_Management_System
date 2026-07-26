@@ -315,4 +315,239 @@ CREATE TABLE IF NOT EXISTS customer_intelligence (
     CONSTRAINT fk_cust_intel_customer FOREIGN KEY (customer_id) REFERENCES customers (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ============================================================================
+-- Module 5: Import Purchase, Clearance & Goods Arrival Management
+--
+-- Lifecycle: purchase -> invoice upload -> clearance assignment -> in transit
+--            -> arrival -> parcel verification -> quantity verification
+--            -> confirm -> inventory update
+-- ============================================================================
+
+-- A single import purchase, sourced from one supplier invoice.
+CREATE TABLE IF NOT EXISTS purchases (
+    id                    INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    purchase_number       VARCHAR(30) NOT NULL,          -- auto: PUR-2026-000001
+    supplier_name         VARCHAR(150) NOT NULL,
+    supplier_invoice_no   VARCHAR(60) NULL,
+    invoice_date          DATE NULL,
+    purchase_date         DATE NOT NULL,
+    invoice_type          ENUM('pdf','image','handwritten','manual') NOT NULL DEFAULT 'manual',
+    expected_arrival_date DATE NULL,
+    total_invoice_value   DECIMAL(14,2) NOT NULL DEFAULT 0,
+    total_weight_kg       DECIMAL(10,2) NOT NULL DEFAULT 0,
+    expected_parcels      SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    notes                 TEXT NULL,
+    status                ENUM('draft','awaiting_clearance','assigned','in_transit',
+                               'arrived','verification_pending','completed')
+                          NOT NULL DEFAULT 'draft',
+    extraction_raw        JSON NULL,                     -- what the extractor returned
+    extraction_confirmed  TINYINT(1) NOT NULL DEFAULT 0, -- owner verified extracted data
+    -- Landed costing: the rate inputs are snapshotted so a past costing stays
+    -- explainable after the settings change.
+    costed_at             DATETIME NULL,
+    lkr_rate_used         DECIMAL(8,4) NULL,
+    clearance_rate_used   DECIMAL(12,2) NULL,
+    handling_charge_used  DECIMAL(12,2) NULL,
+    rounding_step_used    SMALLINT NULL,
+    created_by            INT UNSIGNED NULL,
+    created_at            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_purchase_number (purchase_number),
+    KEY idx_purchase_status (status),
+    KEY idx_purchase_supplier (supplier_name),
+    KEY idx_purchase_date (purchase_date),
+    CONSTRAINT fk_purchase_created_by FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Line items from the supplier invoice. brand_name/size_set_label keep the raw
+-- invoice text; brand_id/product_id are filled once mapped to our catalogue.
+CREATE TABLE IF NOT EXISTS purchase_items (
+    id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    purchase_id     INT UNSIGNED NOT NULL,
+    brand_id        SMALLINT UNSIGNED NULL,
+    brand_name      VARCHAR(80) NULL,              -- as written on the invoice
+    art_no          VARCHAR(60) NULL,
+    colour          VARCHAR(60) NULL,
+    size_set_label  VARCHAR(30) NULL,              -- '5x8', '6-10', ...
+    pairs_per_set   TINYINT UNSIGNED NULL,
+    set_weight_grams INT UNSIGNED NULL,            -- recorded when the shipment is costed
+    quantity_sets   INT NOT NULL DEFAULT 0,
+    quantity_pairs  INT NOT NULL DEFAULT 0,
+    unit_price      DECIMAL(12,2) NULL,
+    landed_cost_per_pair DECIMAL(12,2) NULL,       -- result of the costing run
+    line_total      DECIMAL(14,2) NULL,
+    product_id      INT UNSIGNED NULL,             -- mapped inventory product
+    -- Result of the art-no lookup during verification:
+    --   matched   = an existing product was found and reused
+    --   new       = no match; a product will be created on confirmation
+    --   unmatched = needs the owner to decide
+    match_status    ENUM('matched','new','unmatched') NOT NULL DEFAULT 'unmatched',
+    sort_order      SMALLINT NOT NULL DEFAULT 0,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_pitem_purchase (purchase_id),
+    KEY idx_pitem_brand (brand_id),
+    KEY idx_pitem_product (product_id),
+    CONSTRAINT fk_pitem_purchase FOREIGN KEY (purchase_id) REFERENCES purchases (id) ON DELETE CASCADE,
+    CONSTRAINT fk_pitem_brand    FOREIGN KEY (brand_id)    REFERENCES brands (id)    ON DELETE SET NULL,
+    CONSTRAINT fk_pitem_product  FOREIGN KEY (product_id)  REFERENCES products (id)  ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Clearance agents: clear goods through customs and deliver them to the shop.
+CREATE TABLE IF NOT EXISTS clearance_persons (
+    id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    name            VARCHAR(100) NOT NULL,
+    phone           VARCHAR(30) NULL,              -- mobile number
+    address         TEXT NULL,
+    wage_per_kilo   DECIMAL(8,2) NOT NULL DEFAULT 0, -- LKR per kilo cleared
+    notes           TEXT NULL,
+    is_active       TINYINT(1) NOT NULL DEFAULT 1,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_cp_active (is_active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Junction: many clearance persons <-> many purchases.
+-- Normal case: one agent, one row. Rare case: several agents split the weight.
+CREATE TABLE IF NOT EXISTS purchase_clearance_assignments (
+    id                  INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    purchase_id         INT UNSIGNED NOT NULL,
+    clearance_person_id INT UNSIGNED NOT NULL,
+    assigned_weight_kg  DECIMAL(10,2) NOT NULL DEFAULT 0,
+    parcel_count        SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    assignment_date     DATE NOT NULL,
+    rate_per_kg         DECIMAL(8,2) NULL,          -- snapshot of the agent's rate
+    clearance_cost      DECIMAL(12,2) NULL,         -- assigned_weight_kg * rate_per_kg
+    status              ENUM('assigned','in_transit','delivered','cancelled')
+                        NOT NULL DEFAULT 'assigned',
+    notes               TEXT NULL,
+    created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_pca_purchase_person (purchase_id, clearance_person_id),
+    KEY idx_pca_purchase (purchase_id),
+    KEY idx_pca_person (clearance_person_id),
+    KEY idx_pca_status (status),
+    CONSTRAINT fk_pca_purchase FOREIGN KEY (purchase_id) REFERENCES purchases (id) ON DELETE CASCADE,
+    CONSTRAINT fk_pca_person   FOREIGN KEY (clearance_person_id) REFERENCES clearance_persons (id) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Physical parcels belonging to a purchase, carried by one assignment.
+CREATE TABLE IF NOT EXISTS parcels (
+    id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    purchase_id     INT UNSIGNED NOT NULL,
+    assignment_id   INT UNSIGNED NULL,             -- which agent brought it
+    parcel_number   VARCHAR(40) NOT NULL,          -- PARCEL-2026-000001
+    weight_kg       DECIMAL(10,2) NOT NULL DEFAULT 0,
+    carton_count    SMALLINT UNSIGNED NOT NULL DEFAULT 1, -- cartons / bags
+    arrival_date    DATE NULL,
+    status          ENUM('expected','received','damaged','missing') NOT NULL DEFAULT 'expected',
+    remarks         TEXT NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_parcel_number (parcel_number),
+    KEY idx_parcel_purchase (purchase_id),
+    KEY idx_parcel_assignment (assignment_id),
+    KEY idx_parcel_status (status),
+    CONSTRAINT fk_parcel_purchase   FOREIGN KEY (purchase_id)   REFERENCES purchases (id) ON DELETE CASCADE,
+    CONSTRAINT fk_parcel_assignment FOREIGN KEY (assignment_id) REFERENCES purchase_clearance_assignments (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- One arrival/verification session per purchase. Inventory is only written
+-- when confirmed_at is set AND inventory_updated flips to 1.
+CREATE TABLE IF NOT EXISTS goods_arrivals (
+    id                INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    purchase_id       INT UNSIGNED NOT NULL,
+    arrival_date      DATE NOT NULL,
+    parcels_expected  SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    parcels_received  SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    weight_expected_kg DECIMAL(10,2) NOT NULL DEFAULT 0,
+    weight_received_kg DECIMAL(10,2) NOT NULL DEFAULT 0,
+    counting_mode     ENUM('final','incremental') NOT NULL DEFAULT 'final',
+    partial_receipt   TINYINT(1) NOT NULL DEFAULT 0, -- owner accepted a short delivery
+    status            ENUM('pending','parcels_verified','counting','verified','confirmed')
+                      NOT NULL DEFAULT 'pending',
+    remarks           TEXT NULL,
+    verified_by       INT UNSIGNED NULL,
+    verified_at       DATETIME NULL,
+    confirmed_by      INT UNSIGNED NULL,
+    confirmed_at      DATETIME NULL,
+    inventory_updated TINYINT(1) NOT NULL DEFAULT 0,
+    created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_arrival_purchase (purchase_id),
+    KEY idx_arrival_status (status),
+    CONSTRAINT fk_arrival_purchase    FOREIGN KEY (purchase_id)  REFERENCES purchases (id) ON DELETE CASCADE,
+    CONSTRAINT fk_arrival_verified_by FOREIGN KEY (verified_by)  REFERENCES users (id) ON DELETE SET NULL,
+    CONSTRAINT fk_arrival_confirmed_by FOREIGN KEY (confirmed_by) REFERENCES users (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Per-product expected vs received for an arrival.
+CREATE TABLE IF NOT EXISTS arrival_items (
+    id               INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    arrival_id       INT UNSIGNED NOT NULL,
+    purchase_item_id INT UNSIGNED NOT NULL,
+    product_id       INT UNSIGNED NULL,
+    expected_pairs   INT NOT NULL DEFAULT 0,
+    received_pairs   INT NOT NULL DEFAULT 0,
+    received_sets    INT NULL,                     -- resolved at confirmation
+    status           ENUM('pending','matched','shortage','excess') NOT NULL DEFAULT 'pending',
+    remarks          VARCHAR(255) NULL,
+    created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_arrival_item (arrival_id, purchase_item_id),
+    KEY idx_aitem_arrival (arrival_id),
+    KEY idx_aitem_status (status),
+    CONSTRAINT fk_aitem_arrival FOREIGN KEY (arrival_id)       REFERENCES goods_arrivals (id) ON DELETE CASCADE,
+    CONSTRAINT fk_aitem_pitem   FOREIGN KEY (purchase_item_id) REFERENCES purchase_items (id) ON DELETE CASCADE,
+    CONSTRAINT fk_aitem_product FOREIGN KEY (product_id)       REFERENCES products (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Incremental counting: one row per count entry, usually one per parcel.
+-- arrival_items.received_pairs is the running SUM of these when counting_mode
+-- is 'incremental'.
+CREATE TABLE IF NOT EXISTS arrival_counts (
+    id              INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    arrival_item_id INT UNSIGNED NOT NULL,
+    parcel_id       INT UNSIGNED NULL,
+    counted_pairs   INT NOT NULL,
+    note            VARCHAR(255) NULL,
+    counted_by      INT UNSIGNED NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_acount_item (arrival_item_id),
+    KEY idx_acount_parcel (parcel_id),
+    CONSTRAINT fk_acount_item   FOREIGN KEY (arrival_item_id) REFERENCES arrival_items (id) ON DELETE CASCADE,
+    CONSTRAINT fk_acount_parcel FOREIGN KEY (parcel_id)       REFERENCES parcels (id) ON DELETE SET NULL,
+    CONSTRAINT fk_acount_user   FOREIGN KEY (counted_by)      REFERENCES users (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Every document tied to a shipment. purchase_id is NULL for a calculation note
+-- captured on the fly and attached to a purchase later.
+CREATE TABLE IF NOT EXISTS purchase_attachments (
+    id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    purchase_id   INT UNSIGNED NULL,
+    type          ENUM('supplier_invoice_pdf','invoice_image','handwritten_note',
+                       'calculation_note','clearance_doc','parcel_photo',
+                       'delivery_receipt','other') NOT NULL DEFAULT 'other',
+    path          VARCHAR(255) NOT NULL,
+    thumb_path    VARCHAR(255) NULL,
+    original_name VARCHAR(255) NULL,
+    mime_type     VARCHAR(100) NULL,
+    size_bytes    INT UNSIGNED NULL,
+    caption       VARCHAR(255) NULL,
+    uploaded_by   INT UNSIGNED NULL,
+    created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_pattach_purchase (purchase_id),
+    KEY idx_pattach_type (type),
+    CONSTRAINT fk_pattach_purchase FOREIGN KEY (purchase_id) REFERENCES purchases (id) ON DELETE CASCADE,
+    CONSTRAINT fk_pattach_user     FOREIGN KEY (uploaded_by) REFERENCES users (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 SET FOREIGN_KEY_CHECKS = 1;

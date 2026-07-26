@@ -49,13 +49,19 @@ class Customer extends Model
 
     public function withIntelligence(int $id): ?array
     {
-        return $this->db()->first(
+        $customer = $this->db()->first(
             'SELECT c.*, i.classification, i.lifetime_value, i.total_purchases, i.last_purchase_date, i.overdue_amount
              FROM customers c
              LEFT JOIN customer_intelligence i ON c.id = i.customer_id
              WHERE c.id = ? AND c.deleted_at IS NULL',
             [$id]
         );
+
+        if ($customer && !$customer['classification']) {
+            $customer['classification'] = 'regular';
+        }
+
+        return $customer;
     }
 
     public function updateOutstanding(int $id, float $amount): void

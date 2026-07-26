@@ -82,12 +82,16 @@ class CustomerController extends Controller
         $txnModel = new CustomerTransaction();
         $transactions = $txnModel->byCustomer($id, 50);
         $balance = $txnModel->currentBalance($id);
+        $total_sales = $txnModel->totalSales($id);
+        $total_payments = $txnModel->totalPayments($id);
 
         $this->view('customers/show', [
             'title' => $customer['name'],
             'customer' => $customer,
             'transactions' => $transactions,
-            'balance' => $balance
+            'balance' => $balance,
+            'total_sales' => $total_sales,
+            'total_payments' => $total_payments
         ]);
     }
 
