@@ -45,6 +45,19 @@ class ProductController extends Controller
         ]);
     }
 
+    /** Read-only detail page with the full image gallery. */
+    public function show(Request $request, array $params): void
+    {
+        $product = $this->products->findWithRelations((int) $params['id']);
+        if (!$product) {
+            $this->abort(404, 'Product not found.');
+        }
+        $this->view('products/view', [
+            'title'   => trim(($product['brand_name'] ?? 'Product') . ' ' . ($product['art_no'] ?? '')),
+            'product' => $product,
+        ]);
+    }
+
     public function create(Request $request): void
     {
         $this->renderForm(null);
@@ -61,7 +74,9 @@ class ProductController extends Controller
 
     public function store(Request $request): void
     {
-        $data = $this->validateInput($request);
+        $data = $this->resolveReferences($request->all());
+        $this->validate($data);
+
         $payload = $this->buildPayload($data, null);
         $payload['created_by'] = Auth::id();
 
@@ -75,7 +90,7 @@ class ProductController extends Controller
         }
 
         // Opening stock
-        $opening = (int) $request->input('stock_sets', 0);
+        $opening = (int) ($data['stock_sets'] ?? 0);
         if ($opening !== 0) {
             $this->products->adjustStock($id, $opening, 'manual_in', Auth::id(), 'Opening stock');
         }
@@ -95,7 +110,9 @@ class ProductController extends Controller
             $this->abort(404, 'Product not found.');
         }
 
-        $data = $this->validateInput($request);
+        $data = $this->resolveReferences($request->all());
+        $this->validate($data);
+
         $payload = $this->buildPayload($data, $existing);
 
         // Price-change history
@@ -150,6 +167,24 @@ class ProductController extends Controller
         $this->back();
     }
 
+    /** Update an image's colour name and/or mark it as the main image. */
+    public function updateImage(Request $request, array $params): void
+    {
+        $image = $this->products->findImage((int) $params['imageId']);
+        if (!$image || (int) $image['product_id'] !== (int) $params['id']) {
+            $this->abort(404);
+        }
+        $colour = trim((string) $request->input('colour', ''));
+        $this->products->updateImageMeta((int) $image['id'], $colour !== '' ? $colour : null);
+
+        if ($request->input('is_main')) {
+            $this->products->setMainImage((int) $params['id'], (int) $image['id']);
+        }
+        $this->log('product_image_updated', 'product', (int) $params['id']);
+        Session::flash('success', 'Image updated.');
+        $this->back();
+    }
+
     public function deleteImage(Request $request, array $params): void
     {
         $image = $this->products->findImage((int) $params['imageId']);
@@ -170,7 +205,7 @@ class ProductController extends Controller
         $this->view('products/form', [
             'title'      => $product ? 'Edit Product' : 'Add Product',
             'product'    => $product,
-            'brands'     => (new Brand())->active(),
+            'brands'     => (new Brand())->active(),      // includes `origin` for client-side filtering
             'categories' => (new Category())->active(),
             'sizeSets'   => (new SizeSet())->active(),
             'defaults'   => [
@@ -182,22 +217,70 @@ class ProductController extends Controller
         ]);
     }
 
-    private function validateInput(Request $request): array
+    /**
+     * Turn "add new" selections into real brand/category/size-set ids, and
+     * auto-derive pairs from the chosen size set. Reuses the model helpers.
+     */
+    private function resolveReferences(array $data): array
     {
-        $type = $request->input('type', 'imported');
+        $type = $data['type'] ?? 'imported';
+
+        // Brand — new brand inherits the product's origin (local hides Indian brands)
+        if (($data['brand_id'] ?? '') === '__new__') {
+            $name = trim((string) ($data['new_brand'] ?? ''));
+            $data['brand_id'] = $name !== ''
+                ? (new Brand())->findOrCreate($name, $type === 'imported' ? 'imported' : 'local')
+                : '';
+        }
+
+        // Category
+        if (($data['category_id'] ?? '') === '__new__') {
+            $name = trim((string) ($data['new_category'] ?? ''));
+            $data['category_id'] = $name !== '' ? (new Category())->findOrCreate($name) : '';
+        }
+
+        // Size set — pairs are auto-derived from the label (e.g. "5-9" → 5)
+        if (($data['size_set_id'] ?? '') === '__new__') {
+            $label = trim((string) ($data['new_size_set'] ?? ''));
+            if ($label !== '') {
+                $catId = ctype_digit((string) ($data['category_id'] ?? '')) ? (int) $data['category_id'] : null;
+                $pairs = SizeSet::pairsFromLabel($label);
+                $data['size_set_id'] = (new SizeSet())->findOrCreate($label, $catId, $pairs);
+                if (empty($data['pairs_in_set']) && $pairs > 0) {
+                    $data['pairs_in_set'] = $pairs;
+                }
+            } else {
+                $data['size_set_id'] = '';
+            }
+        }
+
+        // Existing size set selected but pairs left blank → fill from its default
+        if (!empty($data['size_set_id']) && ctype_digit((string) $data['size_set_id']) && empty($data['pairs_in_set'])) {
+            $ss = (new SizeSet())->find((int) $data['size_set_id']);
+            if ($ss && !empty($ss['default_pairs'])) {
+                $data['pairs_in_set'] = (int) $ss['default_pairs'];
+            }
+        }
+
+        return $data;
+    }
+
+    private function validate(array $data): void
+    {
+        $type = $data['type'] ?? 'imported';
         $rules = [
-            'type'             => 'required|in:imported,local,custom',
-            'brand_id'         => 'nullable|integer',
-            'art_no'           => 'nullable|string|max:60',
-            'name'             => 'nullable|string|max:150',
-            'category_id'      => 'nullable|integer',
-            'size_set_id'      => 'nullable|integer',
-            'pairs_in_set'     => 'nullable|integer|min:0',
-            'set_weight_grams' => 'nullable|integer|min:0',
-            'wholesale_price'  => 'nullable|numeric|min:0',
-            'retail_price'     => 'nullable|numeric|min:0',
+            'type'                => 'required|in:imported,local,custom',
+            'brand_id'            => 'nullable|integer',
+            'art_no'              => 'nullable|string|max:60',
+            'name'                => 'nullable|string|max:150',
+            'category_id'         => 'nullable|integer',
+            'size_set_id'         => 'nullable|integer',
+            'pairs_in_set'        => 'nullable|integer|min:0',
+            'set_weight_grams'    => 'nullable|integer|min:0',
+            'wholesale_price'     => 'nullable|numeric|min:0',
+            'retail_price'        => 'nullable|numeric|min:0',
             'low_stock_threshold' => 'nullable|integer|min:0',
-            'notes'            => 'nullable|string|max:1000',
+            'notes'               => 'nullable|string|max:1000',
         ];
         if ($type === 'imported') {
             $rules['indian_price']     = 'required|numeric|min:0';
@@ -206,11 +289,10 @@ class ProductController extends Controller
             $rules['pairs_in_set']     = 'required|integer|min:1';
         }
 
-        $v = new Validator($request->all(), $rules);
+        $v = new Validator($data, $rules);
         if ($v->fails()) {
-            $this->withErrors($v->errors(), $request->all());
+            $this->withErrors($v->errors(), $data);
         }
-        return $request->all();
     }
 
     private function buildPayload(array $data, ?array $existing): array
@@ -265,6 +347,10 @@ class ProductController extends Controller
         return $payload;
     }
 
+    /**
+     * Store uploaded images. A batch colour can be applied to all files in this
+     * upload; individual colours can be refined per-image afterwards.
+     */
     private function handleImageUploads(Request $request, int $productId): void
     {
         $files = $request->files('images');
@@ -272,7 +358,7 @@ class ProductController extends Controller
             return;
         }
         $storage = new StorageService();
-        $colour  = $request->input('image_colour');
+        $colour  = trim((string) $request->input('image_colour', ''));
 
         foreach ($files as $file) {
             $error = $storage->validateImage($file);
@@ -281,7 +367,7 @@ class ProductController extends Controller
                 continue;
             }
             $stored = $storage->storeProductImage($file, $productId);
-            $stored['colour'] = $colour ?: null;
+            $stored['colour'] = $colour !== '' ? $colour : null;
             $this->products->addImage($productId, $stored);
         }
     }

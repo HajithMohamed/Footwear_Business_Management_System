@@ -63,7 +63,7 @@ $qs = function (array $overrides) use ($filters): string {
 <?php else: ?>
   <div class="grid grid-cols-2 gap-3">
     <?php foreach ($result['rows'] as $p): ?>
-      <a href="<?= e(url('products/'.$p['id'].'/edit')) ?>" class="group rounded-2xl bg-white shadow-sm ring-1 ring-slate-100 overflow-hidden active:scale-[.99] transition">
+      <a href="<?= e(url('products/'.$p['id'])) ?>" class="group rounded-2xl bg-white shadow-sm ring-1 ring-slate-100 overflow-hidden active:scale-[.99] transition">
         <div class="aspect-square bg-slate-100 flex items-center justify-center overflow-hidden">
           <?php if (!empty($p['main_thumb'])): ?>
             <img src="<?= e(StorageService::url($p['main_thumb'])) ?>" alt="" loading="lazy" class="h-full w-full object-cover">

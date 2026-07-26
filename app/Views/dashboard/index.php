@@ -68,16 +68,37 @@
   </a>
 </div>
 
-<!-- Coming-soon modules -->
+<!-- Phase 2: Customers & Payments -->
+<h2 class="mt-6 mb-2 text-sm font-semibold text-slate-500">Phase 2 — Customers & Payments</h2>
+<div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+  <a href="<?= e(url('customers')) ?>" class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100 active:scale-[.99] transition hover:ring-brand-600">
+    <div class="text-2xl">👥</div><p class="mt-1 text-sm font-medium text-slate-700">Customers</p>
+  </a>
+  <a href="<?= e(url('cheques')) ?>" class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100 active:scale-[.99] transition hover:ring-brand-600">
+    <div class="text-2xl">📋</div><p class="mt-1 text-sm font-medium text-slate-700">Cheques</p>
+  </a>
+  <a href="<?= e(url('intelligence')) ?>" class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100 active:scale-[.99] transition hover:ring-brand-600">
+    <div class="text-2xl">📊</div><p class="mt-1 text-sm font-medium text-slate-700">Intelligence</p>
+  </a>
+</div>
+
+<!-- Coming soon -->
 <h2 class="mt-6 mb-2 text-sm font-semibold text-slate-500">Coming soon</h2>
-<div class="grid grid-cols-3 gap-3 opacity-60">
-  <div class="rounded-2xl bg-white p-3 text-center shadow-sm ring-1 ring-slate-100">
-    <div class="text-xl">👥</div><p class="mt-1 text-[11px] text-slate-500">Customers</p><p class="text-[10px] text-slate-300">Phase 2</p>
+<div x-data="{ soon: '' }" class="relative">
+  <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+    <button type="button" @click="soon='Invoices — arriving in Phase 3'"
+            class="rounded-2xl bg-white p-3 text-center shadow-sm ring-1 ring-slate-100 active:scale-95 transition">
+      <div class="text-xl">🧾</div><p class="mt-1 text-[11px] text-slate-500">Invoices</p><p class="text-[10px] text-slate-300">Phase 3</p>
+    </button>
+    <button type="button" @click="soon='Import &amp; Clearance — arriving in Phase 4'"
+            class="rounded-2xl bg-white p-3 text-center shadow-sm ring-1 ring-slate-100 active:scale-95 transition">
+      <div class="text-xl">🚢</div><p class="mt-1 text-[11px] text-slate-500">Imports</p><p class="text-[10px] text-slate-300">Phase 4</p>
+    </button>
+    <button type="button" @click="soon='Accounting — arriving in Phase 5'"
+            class="rounded-2xl bg-white p-3 text-center shadow-sm ring-1 ring-slate-100 active:scale-95 transition">
+      <div class="text-xl">📈</div><p class="mt-1 text-[11px] text-slate-500">Reports</p><p class="text-[10px] text-slate-300">Phase 5</p>
+    </button>
   </div>
-  <div class="rounded-2xl bg-white p-3 text-center shadow-sm ring-1 ring-slate-100">
-    <div class="text-xl">🧾</div><p class="mt-1 text-[11px] text-slate-500">Invoices</p><p class="text-[10px] text-slate-300">Phase 3</p>
-  </div>
-  <div class="rounded-2xl bg-white p-3 text-center shadow-sm ring-1 ring-slate-100">
-    <div class="text-xl">🚢</div><p class="mt-1 text-[11px] text-slate-500">Imports</p><p class="text-[10px] text-slate-300">Phase 4</p>
-  </div>
+  <div x-show="soon" x-transition @click="soon=''" style="display:none"
+       class="mt-3 rounded-xl bg-slate-800 px-4 py-2.5 text-center text-sm text-white" x-text="soon"></div>
 </div>

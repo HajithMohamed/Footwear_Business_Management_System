@@ -10,18 +10,36 @@ $val = function (string $key, $default = '') use ($product) {
     return $product[$key] ?? $default;
 };
 $type = $val('type', 'imported');
-$sizePairs = [];
-foreach ($sizeSets as $s) { $sizePairs[$s['id']] = (int) $s['default_pairs']; }
+
+$init = json_encode([
+    'type'       => $type,
+    'brands'     => array_map(fn ($b) => ['id' => (int) $b['id'], 'name' => $b['name'], 'origin' => $b['origin']], $brands),
+    'sizePairs'  => array_reduce($sizeSets, function ($c, $s) { $c[(string) $s['id']] = (int) $s['default_pairs']; return $c; }, []),
+    'rates'      => ['lkr_rate' => (float) $defaults['lkr_rate'], 'per_kilo_clearance' => (float) $defaults['per_kilo_clearance'], 'handling' => (float) $defaults['handling_charge']],
+    'brandId'    => (string) $val('brand_id'),
+    'categoryId' => (string) $val('category_id'),
+    'sizeSetId'  => (string) $val('size_set_id'),
+    'cost'       => [
+        'indian_price'     => (float) ($val('indian_price') ?: 0),
+        'discount_percent' => (float) ($val('discount_percent') ?: 0),
+        'set_weight_grams' => (float) ($val('set_weight_grams') ?: 0),
+        'pairs_in_set'     => (float) ($val('pairs_in_set') ?: 0),
+    ],
+], JSON_HEX_APOS | JSON_HEX_QUOT);
 ?>
 
-<div class="flex items-center gap-2 mb-4">
-  <a href="<?= e(url('products')) ?>" class="text-slate-400">←</a>
-  <h1 class="text-lg font-bold text-slate-800"><?= $isEdit ? 'Edit Product' : 'Add Product' ?></h1>
+<div class="flex items-center justify-between mb-4">
+  <div class="flex items-center gap-2">
+    <a href="<?= e(url('products')) ?>" class="text-slate-400">←</a>
+    <h1 class="text-lg font-bold text-slate-800"><?= $isEdit ? 'Edit Product' : 'Add Product' ?></h1>
+  </div>
+  <?php if ($isEdit): ?>
+    <a href="<?= e(url('products/' . $product['id'])) ?>" class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600">View</a>
+  <?php endif; ?>
 </div>
 
 <form method="post" action="<?= e($action) ?>" enctype="multipart/form-data"
-      x-data='productForm(<?= json_encode(["type"=>$type,"pairs"=>$sizePairs,"rates"=>["lkr_rate"=>(float)$defaults["lkr_rate"],"per_kilo_clearance"=>(float)$defaults["per_kilo_clearance"],"handling"=>(float)$defaults["handling_charge"]]], JSON_HEX_APOS|JSON_HEX_QUOT) ?>)'
-      class="space-y-4">
+      x-data='productForm(<?= $init ?>)' class="space-y-4">
   <?= csrf_field() ?>
 
   <!-- Type selector -->
@@ -30,28 +48,33 @@ foreach ($sizeSets as $s) { $sizePairs[$s['id']] = (int) $s['default_pairs']; }
     <div class="mt-2 grid grid-cols-3 gap-2">
       <?php foreach (['imported'=>'👞 Imported','local'=>'🏠 Local','custom'=>'🎒 Custom'] as $v=>$l): ?>
         <label class="cursor-pointer">
-          <input type="radio" name="type" value="<?= $v ?>" x-model="type" class="peer sr-only">
+          <input type="radio" name="type" value="<?= $v ?>" x-model="type" @change="onType" class="peer sr-only">
           <div class="rounded-xl border-2 border-slate-200 px-2 py-3 text-center text-xs font-medium text-slate-600 peer-checked:border-brand-600 peer-checked:bg-brand-50 peer-checked:text-brand-700"><?= $l ?></div>
         </label>
       <?php endforeach; ?>
     </div>
-    <p class="mt-2 text-[11px] text-slate-400" x-show="type==='imported'">Landed cost is calculated automatically from the values below.</p>
-    <p class="mt-2 text-[11px] text-slate-400" x-show="type!=='imported'">Enter selling prices manually — no cost calculation.</p>
+    <p class="mt-2 text-[11px] text-slate-400" x-show="type==='imported'">Landed cost is calculated automatically. Only imported brands are shown below.</p>
+    <p class="mt-2 text-[11px] text-slate-400" x-show="type==='local'">Enter selling prices manually. Only local brands are shown below.</p>
+    <p class="mt-2 text-[11px] text-slate-400" x-show="type==='custom'">Accessories etc. — all brands available, manual pricing.</p>
   </div>
 
   <!-- Basic info -->
   <section class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100 space-y-3">
     <h2 class="text-sm font-semibold text-slate-700">Basic details</h2>
     <div class="grid grid-cols-2 gap-3">
-      <label class="block">
+      <!-- Brand (filtered by type + add-new) -->
+      <div class="block">
         <span class="text-xs font-medium text-slate-500">Brand</span>
-        <select name="brand_id" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white">
-          <option value="">—</option>
-          <?php foreach ($brands as $b): ?>
-            <option value="<?= $b['id'] ?>" <?= (string)$val('brand_id')===(string)$b['id']?'selected':'' ?>><?= e($b['name']) ?></option>
-          <?php endforeach; ?>
+        <select name="brand_id" x-model="brandId" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white">
+          <option value="">— Select —</option>
+          <template x-for="b in filteredBrands()" :key="b.id">
+            <option :value="String(b.id)" x-text="b.name"></option>
+          </template>
+          <option value="__new__">➕ Add new brand…</option>
         </select>
-      </label>
+        <input x-show="brandId==='__new__'" name="new_brand" value="<?= e(old('new_brand')) ?>"
+               placeholder="New brand name" class="mt-2 w-full rounded-xl border border-brand-200 px-3 py-2.5 text-sm">
+      </div>
       <label class="block">
         <span class="text-xs font-medium text-slate-500">Art number</span>
         <input name="art_no" value="<?= e($val('art_no')) ?>" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">
@@ -60,27 +83,38 @@ foreach ($sizeSets as $s) { $sizePairs[$s['id']] = (int) $s['default_pairs']; }
         <span class="text-xs font-medium text-slate-500">Name <span class="text-slate-300">(optional)</span></span>
         <input name="name" value="<?= e($val('name')) ?>" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">
       </label>
-      <label class="block">
+      <!-- Category (add-new) -->
+      <div class="block">
         <span class="text-xs font-medium text-slate-500">Category</span>
-        <select name="category_id" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white">
+        <select name="category_id" x-model="categoryId" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white">
           <option value="">—</option>
           <?php foreach ($categories as $c): ?>
-            <option value="<?= $c['id'] ?>" <?= (string)$val('category_id')===(string)$c['id']?'selected':'' ?>><?= e($c['name']) ?></option>
+            <option value="<?= $c['id'] ?>"><?= e($c['name']) ?></option>
           <?php endforeach; ?>
+          <option value="__new__">➕ Add new category…</option>
         </select>
-      </label>
-      <label class="block">
+        <input x-show="categoryId==='__new__'" name="new_category" value="<?= e(old('new_category')) ?>"
+               placeholder="New category" class="mt-2 w-full rounded-xl border border-brand-200 px-3 py-2.5 text-sm">
+      </div>
+      <!-- Size set (add-new + auto pairs) -->
+      <div class="block">
         <span class="text-xs font-medium text-slate-500">Size set</span>
-        <select name="size_set_id" x-model="sizeSetId" @change="applyDefaultPairs" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white">
+        <select name="size_set_id" x-model="sizeSetId" @change="onSize" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white">
           <option value="">—</option>
           <?php foreach ($sizeSets as $s): ?>
-            <option value="<?= $s['id'] ?>" <?= (string)$val('size_set_id')===(string)$s['id']?'selected':'' ?>><?= e(($s['category_name']?$s['category_name'].' ':'').$s['label']) ?></option>
+            <option value="<?= $s['id'] ?>"><?= e(($s['category_name'] ? $s['category_name'].' ' : '').$s['label']) ?> (<?= (int)$s['default_pairs'] ?> pr)</option>
           <?php endforeach; ?>
+          <option value="__new__">➕ Add new size set…</option>
         </select>
-      </label>
+        <input x-show="sizeSetId==='__new__'" name="new_size_set" value="<?= e(old('new_size_set')) ?>"
+               placeholder="e.g. 5-9" @input="onNewSize($event.target.value)"
+               class="mt-2 w-full rounded-xl border border-brand-200 px-3 py-2.5 text-sm">
+      </div>
       <label class="block">
         <span class="text-xs font-medium text-slate-500">Pairs / set</span>
-        <input type="number" min="0" name="pairs_in_set" x-model.number="cost.pairs_in_set" @input="compute" value="<?= e($val('pairs_in_set')) ?>" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">
+        <input type="number" min="0" name="pairs_in_set" x-model.number="cost.pairs_in_set" @input="compute"
+               class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">
+        <span class="text-[10px] text-slate-400" x-show="sizeSetId && sizeSetId!==''">Auto-filled from size set — override if needed.</span>
       </label>
     </div>
   </section>
@@ -155,27 +189,41 @@ foreach ($sizeSets as $s) { $sizePairs[$s['id']] = (int) $s['default_pairs']; }
   <!-- Images -->
   <section class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100 space-y-3">
     <h2 class="text-sm font-semibold text-slate-700">Images</h2>
+
     <?php if ($isEdit && !empty($product['images'])): ?>
-      <div class="grid grid-cols-4 gap-2">
+      <p class="text-[11px] text-slate-400">Set a colour name per image and choose the main image.</p>
+      <div class="space-y-2">
         <?php foreach ($product['images'] as $img): ?>
-          <div class="relative group">
-            <img src="<?= e(StorageService::url($img['thumb_path'] ?: $img['path'])) ?>" alt="" class="aspect-square w-full rounded-lg object-cover ring-1 ring-slate-100">
-            <?php if ($img['is_main']): ?><span class="absolute top-1 left-1 rounded bg-brand-600 text-white text-[9px] px-1">Main</span><?php endif; ?>
+          <div class="flex items-center gap-2 rounded-xl border border-slate-100 p-2">
+            <img src="<?= e(StorageService::url($img['thumb_path'] ?: $img['path'])) ?>" alt="" class="h-14 w-14 shrink-0 rounded-lg object-cover ring-1 ring-slate-100">
+            <form method="post" action="<?= e(url('products/'.$product['id'].'/images/'.$img['id'])) ?>" class="flex flex-1 items-center gap-2">
+              <?= csrf_field() ?>
+              <input name="colour" value="<?= e($img['colour']) ?>" placeholder="Colour name"
+                     class="min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-sm">
+              <label class="flex shrink-0 items-center gap-1 text-[11px] text-slate-500">
+                <input type="checkbox" name="is_main" value="1" <?= $img['is_main'] ? 'checked' : '' ?>> Main
+              </label>
+              <button class="shrink-0 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-white">Save</button>
+            </form>
             <button type="button" onclick="if(confirm('Remove this image?')) document.getElementById('delimg<?= $img['id'] ?>').submit();"
-                    class="absolute top-1 right-1 h-5 w-5 rounded-full bg-red-600 text-white text-xs leading-none">×</button>
+                    class="shrink-0 rounded-lg bg-red-50 px-2 py-1.5 text-red-600">🗑</button>
           </div>
         <?php endforeach; ?>
       </div>
     <?php endif; ?>
-    <label class="block">
-      <span class="text-xs font-medium text-slate-500">Upload images (JPG/PNG/WEBP)</span>
-      <input type="file" name="images[]" accept="image/jpeg,image/png,image/webp" multiple
-             class="mt-1 w-full text-sm text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-brand-700">
-    </label>
-    <label class="block">
-      <span class="text-xs font-medium text-slate-500">Colour for these images <span class="text-slate-300">(optional)</span></span>
-      <input name="image_colour" placeholder="e.g. Maroon" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">
-    </label>
+
+    <div class="rounded-xl border border-dashed border-slate-200 p-3 space-y-2">
+      <label class="block">
+        <span class="text-xs font-medium text-slate-500">Upload images (JPG/PNG/WEBP) — multiple allowed</span>
+        <input type="file" name="images[]" accept="image/jpeg,image/png,image/webp" multiple
+               class="mt-1 w-full text-sm text-slate-500 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-brand-700">
+      </label>
+      <label class="block">
+        <span class="text-xs font-medium text-slate-500">Colour for this batch <span class="text-slate-300">(optional)</span></span>
+        <input name="image_colour" placeholder="e.g. Maroon — applied to the files above" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">
+      </label>
+      <p class="text-[10px] text-slate-400">Tip: upload one colour at a time to keep photos grouped. You can rename each image's colour after saving.</p>
+    </div>
   </section>
 
   <!-- Notes -->
@@ -233,20 +281,44 @@ foreach ($sizeSets as $s) { $sizePairs[$s['id']] = (int) $s['default_pairs']; }
 function productForm(init) {
   return {
     type: init.type,
-    sizeSetId: '<?= e($val('size_set_id')) ?>',
-    pairsMap: init.pairs,
+    brands: init.brands,
+    sizePairs: init.sizePairs,
     rates: init.rates,
-    cost: {
-      indian_price: <?= (float) ($val('indian_price') ?: 0) ?>,
-      discount_percent: <?= (float) ($val('discount_percent') ?: 0) ?>,
-      set_weight_grams: <?= (float) ($val('set_weight_grams') ?: 0) ?>,
-      pairs_in_set: <?= (float) ($val('pairs_in_set') ?: 0) ?>,
-    },
+    brandId: init.brandId,
+    categoryId: init.categoryId,
+    sizeSetId: init.sizeSetId,
+    cost: init.cost,
     preview: {}, _t: null,
+
     money(v){ return 'Rs. ' + (Number(v)||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); },
-    applyDefaultPairs(){
-      const p = this.pairsMap[this.sizeSetId];
-      if (p && !this.cost.pairs_in_set) { this.cost.pairs_in_set = p; this.compute(); }
+
+    filteredBrands(){
+      if (this.type === 'custom') return this.brands;
+      return this.brands.filter(b => b.origin === this.type);
+    },
+    onType(){
+      // drop a selected brand that doesn't belong to the new type
+      if (this.brandId && this.brandId !== '__new__'
+          && !this.filteredBrands().some(b => String(b.id) === String(this.brandId))) {
+        this.brandId = '';
+      }
+      this.compute();
+    },
+    parsePairs(label){
+      const m = String(label).match(/(\d+)\s*[-–—to]+\s*(\d+)/i);
+      if (m){ const lo=+m[1], hi=+m[2]; return hi>=lo ? (hi-lo+1) : 0; }
+      return /^\d+$/.test(String(label).trim()) ? 1 : 0;
+    },
+    onSize(){
+      if (this.sizeSetId && this.sizeSetId !== '__new__' && this.sizePairs[this.sizeSetId]) {
+        this.cost.pairs_in_set = this.sizePairs[this.sizeSetId];   // auto-calc (req #2)
+      }
+      this.compute();
+    },
+    onNewSize(label){
+      const p = this.parsePairs(label);
+      if (p > 0) this.cost.pairs_in_set = p;
+      this.compute();
     },
     init(){ if (this.type === 'imported') this.compute(); },
     compute(){

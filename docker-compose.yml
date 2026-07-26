@@ -25,6 +25,9 @@ services:
       db:
         condition: service_healthy
     volumes:
+      # Dev convenience: live-edit source without rebuilding the image.
+      # (For a pure production image, remove this line — the code is baked in via COPY.)
+      - ./:/var/www/html
       - uploads:/var/www/html/public/uploads
 
   db:

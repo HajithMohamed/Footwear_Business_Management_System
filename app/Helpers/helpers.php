@@ -165,3 +165,52 @@ function error(string $key): ?string
     $errors = \App\Core\Session::get('_errors', []);
     return $errors[$key][0] ?? null;
 }
+
+/** Get a request input value. */
+function request(string $key = null, $default = null)
+{
+    $request = \App\Core\Request::instance();
+    if ($key === null) {
+        return $request->all();
+    }
+    return $request->input($key, $default);
+}
+
+/** Get a required request input (throw error if missing). */
+function required(string $key): string
+{
+    $value = request($key);
+    if (empty($value)) {
+        throw new \Exception("Required field missing: $key");
+    }
+    return (string) $value;
+}
+
+/** Render a view with data. */
+function view(string $path, array $data = []): string
+{
+    extract($data);
+    $filePath = base_path("app/Views/$path.php");
+    if (!is_file($filePath)) {
+        throw new \Exception("View not found: $path");
+    }
+    ob_start();
+    include $filePath;
+    return ob_get_clean();
+}
+
+/** Return 404 response. */
+function notFound(string $message = 'Not found'): void
+{
+    http_response_code(404);
+    echo view('errors/404', ['message' => $message]);
+    exit;
+}
+
+/** Set a flash message for the next request. */
+function flash(string $message, string $type = 'info'): void
+{
+    $messages = \App\Core\Session::get('_flash', []);
+    $messages[] = ['message' => $message, 'type' => $type];
+    \App\Core\Session::put('_flash', $messages);
+}

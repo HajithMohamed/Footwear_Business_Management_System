@@ -78,14 +78,18 @@ $navActive = function (string $prefix) use ($currentPath): string {
       <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5"/></svg>
       <span class="text-[11px]">Products</span>
     </a>
+    <a href="<?= e(url('customers')) ?>" class="flex flex-col items-center justify-center gap-0.5 <?= $navActive('/customers') ?>">
+      <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+      <span class="text-[11px]">Customers</span>
+    </a>
 
     <!-- Center FAB -->
-    <div class="flex items-start justify-center" x-data="{open:false}">
+    <div class="flex items-start justify-center" x-data="{open:false, soon:''}">
       <button @click="open=true" class="-mt-6 h-14 w-14 rounded-full bg-brand-600 text-white shadow-lg shadow-brand-600/30 flex items-center justify-center active:scale-95 transition">
         <svg class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
       </button>
       <!-- Action sheet -->
-      <div x-show="open" x-transition.opacity @click="open=false" style="display:none" class="fixed inset-0 z-40 bg-black/40 flex items-end sm:items-center justify-center">
+      <div x-show="open" x-transition.opacity @click="open=false; soon=''" style="display:none" class="fixed inset-0 z-40 bg-black/40 flex items-end sm:items-center justify-center">
         <div @click.stop class="w-full sm:max-w-sm bg-white rounded-t-2xl sm:rounded-2xl p-4 space-y-2">
           <p class="text-center text-sm font-semibold text-slate-500 pb-1">Quick actions</p>
           <a href="<?= e(url('products/create')) ?>" class="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3 hover:bg-slate-100">
@@ -94,10 +98,11 @@ $navActive = function (string $prefix) use ($currentPath): string {
           <a href="<?= e(url('calculator')) ?>" class="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3 hover:bg-slate-100">
             <span class="text-xl">🧮</span><span class="font-medium">Cost Calculator</span>
           </a>
-          <div class="flex items-center gap-3 rounded-xl px-4 py-3 text-slate-300">
+          <button type="button" @click="soon='New Invoice — arriving in Phase 3'" class="w-full flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3 text-slate-400 hover:bg-slate-100">
             <span class="text-xl">🧾</span><span class="font-medium">New Invoice <em class="text-xs">(Phase 3)</em></span>
-          </div>
-          <button @click="open=false" class="w-full mt-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-500">Close</button>
+          </button>
+          <p x-show="soon" x-transition style="display:none" class="rounded-lg bg-slate-800 px-3 py-2 text-center text-xs text-white" x-text="soon"></p>
+          <button @click="open=false; soon=''" class="w-full mt-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-500">Close</button>
         </div>
       </div>
     </div>

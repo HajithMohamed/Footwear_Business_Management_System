@@ -141,6 +141,37 @@ class Product extends Model
         $this->db()->query('DELETE FROM product_images WHERE id = ?', [$imageId]);
     }
 
+    /** Update an image's colour label. */
+    public function updateImageMeta(int $imageId, ?string $colour): void
+    {
+        $this->db()->query('UPDATE product_images SET colour = ? WHERE id = ?', [$colour, $imageId]);
+    }
+
+    /** Make one image the main image for a product (unsets the others). */
+    public function setMainImage(int $productId, int $imageId): void
+    {
+        $this->db()->beginTransaction();
+        try {
+            $this->db()->query('UPDATE product_images SET is_main = 0 WHERE product_id = ?', [$productId]);
+            $this->db()->query('UPDATE product_images SET is_main = 1 WHERE id = ? AND product_id = ?', [$imageId, $productId]);
+            $this->db()->commit();
+        } catch (\Throwable $e) {
+            $this->db()->rollBack();
+            throw $e;
+        }
+    }
+
+    /** Group a product's images by colour (null colour → "Uncategorised"). */
+    public function imagesByColour(int $productId): array
+    {
+        $groups = [];
+        foreach ($this->images($productId) as $img) {
+            $key = $img['colour'] ?: '';
+            $groups[$key][] = $img;
+        }
+        return $groups;
+    }
+
     /** Record a price change into the append-only history. */
     public function recordPriceChange(int $productId, string $type, $old, $new, ?int $userId): void
     {
