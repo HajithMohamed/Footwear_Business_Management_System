@@ -67,8 +67,29 @@ INSERT INTO settings (`key`, `value`, `type`, `group`, label) VALUES
     ('retention_softdelete_days', '30',  'int', 'cleanup', 'Purge soft-deleted records after (days)'),
     ('retention_tmp_hours',       '24',  'int', 'cleanup', 'Delete unattached temp uploads after (hours)'),
     ('retention_activitylog_days','180', 'int', 'cleanup', 'Delete activity logs older than (days)'),
-    ('retention_backups_keep',    '10',  'int', 'cleanup', 'Number of backups to keep')
+    ('retention_backups_keep',    '10',  'int', 'cleanup', 'Number of backups to keep'),
+    -- Credit terms & customer-behaviour thresholds
+    ('default_credit_period_days', '60',    'int', 'credit', 'Default customer credit period (days)'),
+    ('dormant_after_days',         '60',    'int', 'credit', 'Treat a customer as dormant after (days) with no purchase'),
+    ('vip_lifetime_value',         '500000','int', 'credit', 'Lifetime sales above which a customer is VIP (Rs.)'),
+    ('cheque_reminder_days',       '7',     'int', 'credit', 'Warn this many days before a cheque is due'),
+    ('default_wholesale_margin',   '25',    'int', 'cost',   'Default wholesale margin over landed cost (%)')
 ON DUPLICATE KEY UPDATE `value` = VALUES(`value`);
+
+-- Operating expense categories (net profit = gross profit - these)
+INSERT INTO expense_categories (name, sort_order) VALUES
+    ('Rent',                 10),
+    ('Salaries & Wages',     20),
+    ('Clearance Agent Wages',30),
+    ('Transport & Delivery', 40),
+    ('Utilities',            50),
+    ('Bank Charges',         60),
+    ('Shop Maintenance',     70),
+    ('Packaging & Supplies', 80),
+    ('Marketing',            90),
+    ('Damaged / Wastage',   100),
+    ('Other',               999)
+ON DUPLICATE KEY UPDATE sort_order = VALUES(sort_order);
 
 -- ============================================================================
 -- Phase 2: Customers, Payments, Cheques

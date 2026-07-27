@@ -5,7 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#0f2557">
-    <title><?= e($title ?? 'Footwear ERP') ?> · <?= e(config('app.name')) ?></title>
+    <title><?= e($title ?? 'Shoe Bank') ?> · <?= e(config('app.name')) ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = { theme: { extend: { colors: {

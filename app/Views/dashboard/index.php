@@ -5,8 +5,81 @@
   <p class="text-sm text-slate-500"><?= e(date('l, j M Y')) ?></p>
 </div>
 
+<!-- This month, in money -->
+<?php $net = (float) $money['net_profit']; $isProfit = $net >= 0; ?>
+<a href="<?= e(url('finance')) ?>"
+   class="block rounded-2xl <?= $isProfit ? 'bg-emerald-600' : 'bg-red-600' ?> p-5 text-white shadow-sm active:scale-[.99] transition">
+  <div class="flex items-start justify-between">
+    <div>
+      <p class="text-xs font-medium text-white/70">
+        <?= $isProfit ? 'Net profit' : 'Net loss' ?> · <?= e(date('F')) ?>
+      </p>
+      <p class="mt-1 text-3xl font-bold"><?= $isProfit ? '' : '− ' ?><?= money(abs($net)) ?></p>
+    </div>
+    <span class="text-white/50">→</span>
+  </div>
+  <p class="mt-1 text-xs text-white/70">
+    <?= money($money['revenue']) ?> sold · <?= money($money['cash_collected']) ?> collected
+  </p>
+</a>
+
+<div class="mt-3 grid grid-cols-2 gap-3">
+  <a href="<?= e(url('sales')) ?>" class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100 active:scale-[.99] transition">
+    <p class="text-[11px] font-medium text-slate-400">Sales today</p>
+    <p class="mt-1 text-xl font-bold text-slate-800"><?= money($periods['today'] ?? 0) ?></p>
+    <p class="text-[11px] text-slate-400"><?= (int) ($periods['today_invoices'] ?? 0) ?> invoice(s)</p>
+  </a>
+  <a href="<?= e(url('reports/receivables')) ?>" class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100 active:scale-[.99] transition">
+    <p class="text-[11px] font-medium text-slate-400">Owed to you</p>
+    <p class="mt-1 text-xl font-bold <?= $receivables['outstanding'] > 0 ? 'text-red-600' : 'text-emerald-600' ?>">
+      <?= money($receivables['outstanding']) ?>
+    </p>
+    <p class="text-[11px] text-slate-400"><?= (int) $receivables['customers'] ?> customer(s)</p>
+  </a>
+</div>
+
+<!-- What needs chasing today -->
+<?php if (!empty($overdueSales) || !empty($chequesDue)): ?>
+  <div class="mt-3 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">
+    <div class="border-b border-slate-100 bg-red-50 px-4 py-3">
+      <h2 class="text-sm font-semibold text-red-800">Needs attention</h2>
+    </div>
+    <ul class="divide-y divide-slate-50">
+      <?php foreach ($chequesDue as $c): ?>
+        <li>
+          <a href="<?= e(url("cheques/{$c['id']}")) ?>" class="flex items-center justify-between gap-3 px-4 py-2.5">
+            <div class="min-w-0">
+              <p class="truncate text-sm font-medium text-slate-800">🏦 Bank cheque · <?= e($c['customer_name']) ?></p>
+              <p class="text-[11px] text-slate-400">
+                #<?= e($c['cheque_number']) ?> ·
+                <?= (int) $c['days_until'] < 0
+                      ? abs((int) $c['days_until']) . ' day(s) late'
+                      : ((int) $c['days_until'] === 0 ? 'due today' : 'due in ' . (int) $c['days_until'] . ' day(s)') ?>
+              </p>
+            </div>
+            <span class="shrink-0 text-sm font-semibold text-slate-800"><?= money($c['amount']) ?></span>
+          </a>
+        </li>
+      <?php endforeach; ?>
+      <?php foreach ($overdueSales as $o): ?>
+        <li>
+          <a href="<?= e(url("sales/{$o['id']}")) ?>" class="flex items-center justify-between gap-3 px-4 py-2.5">
+            <div class="min-w-0">
+              <p class="truncate text-sm font-medium text-slate-800">⏰ Overdue · <?= e($o['customer_name'] ?: 'Walk-in') ?></p>
+              <p class="text-[11px] text-slate-400">
+                <?= e($o['invoice_number']) ?> · <?= (int) $o['days_overdue'] ?> day(s) late
+              </p>
+            </div>
+            <span class="shrink-0 text-sm font-semibold text-red-600"><?= money($o['unpaid']) ?></span>
+          </a>
+        </li>
+      <?php endforeach; ?>
+    </ul>
+  </div>
+<?php endif; ?>
+
 <!-- Primary stat cards -->
-<div class="grid grid-cols-2 gap-3">
+<div class="mt-3 grid grid-cols-2 gap-3">
   <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
     <p class="text-xs font-medium text-slate-400">Total Products</p>
     <p class="mt-1 text-2xl font-bold text-slate-800"><?= (int) $stats['total_products'] ?></p>
@@ -259,15 +332,19 @@
   </a>
 </div>
 
-<!-- Coming soon -->
-<h2 class="mt-6 mb-2 text-sm font-semibold text-slate-500">Coming soon</h2>
-<div x-data="{ soon: '' }" class="relative">
-  <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
-    <button type="button" @click="soon='Recording sales to customers — not built yet, so stock only ever goes in'"
-            class="rounded-2xl bg-white p-3 text-center shadow-sm ring-1 ring-slate-100 active:scale-95 transition">
-      <div class="text-xl">🧾</div><p class="mt-1 text-[11px] text-slate-500">Sales</p><p class="text-[10px] text-slate-300">Not built</p>
-    </button>
-  </div>
-  <div x-show="soon" x-transition @click="soon=''" style="display:none"
-       class="mt-3 rounded-xl bg-slate-800 px-4 py-2.5 text-center text-sm text-white" x-text="soon"></div>
+<!-- Money out -->
+<h2 class="mt-6 mb-2 text-sm font-semibold text-slate-500">Sales &amp; money</h2>
+<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+  <a href="<?= e(url('sales/create')) ?>" class="rounded-2xl bg-white p-3 text-center shadow-sm ring-1 ring-slate-100 active:scale-95 transition">
+    <div class="text-xl">🧾</div><p class="mt-1 text-[11px] text-slate-600">New invoice</p>
+  </a>
+  <a href="<?= e(url('sales')) ?>" class="rounded-2xl bg-white p-3 text-center shadow-sm ring-1 ring-slate-100 active:scale-95 transition">
+    <div class="text-xl">📃</div><p class="mt-1 text-[11px] text-slate-600">All sales</p>
+  </a>
+  <a href="<?= e(url('expenses')) ?>" class="rounded-2xl bg-white p-3 text-center shadow-sm ring-1 ring-slate-100 active:scale-95 transition">
+    <div class="text-xl">💸</div><p class="mt-1 text-[11px] text-slate-600">Expenses</p>
+  </a>
+  <a href="<?= e(url('finance/profit-loss')) ?>" class="rounded-2xl bg-white p-3 text-center shadow-sm ring-1 ring-slate-100 active:scale-95 transition">
+    <div class="text-xl">📈</div><p class="mt-1 text-[11px] text-slate-600">Profit &amp; loss</p>
+  </a>
 </div>

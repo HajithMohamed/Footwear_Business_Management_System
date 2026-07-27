@@ -15,7 +15,7 @@ $navActive = function (string $prefix) use ($currentPath): string {
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#0f2557">
     <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
-    <title><?= e($title ?? 'Footwear ERP') ?> · <?= e(config('app.name')) ?></title>
+    <title><?= e($title ?? 'Shoe Bank') ?> · <?= e(config('app.name')) ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -74,16 +74,11 @@ $navActive = function (string $prefix) use ($currentPath): string {
       <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10.5 12 3l9 7.5M5 9.5V21h14V9.5"/></svg>
       <span class="text-[11px]">Home</span>
     </a>
-    <a href="<?= e(url('products')) ?>" class="flex flex-col items-center justify-center gap-0.5 <?= $navActive('/products') ?>">
-      <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5"/></svg>
-      <span class="text-[11px]">Products</span>
+    <a href="<?= e(url('sales')) ?>" class="flex flex-col items-center justify-center gap-0.5 <?= $navActive('/sales') ?>">
+      <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m-7.5 5h9a1.5 1.5 0 0 0 1.5-1.5V7.5L14.25 3h-6A1.5 1.5 0 0 0 6.75 4.5v15A1.5 1.5 0 0 0 8.25 21Z"/></svg>
+      <span class="text-[11px]">Sales</span>
     </a>
-    <a href="<?= e(url('customers')) ?>" class="flex flex-col items-center justify-center gap-0.5 <?= $navActive('/customers') ?>">
-      <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
-      <span class="text-[11px]">Customers</span>
-    </a>
-
-    <!-- Center FAB -->
+    <!-- Center FAB (3rd of 5 cells, so it sits dead centre) -->
     <div class="flex items-start justify-center" x-data="{open:false, soon:''}">
       <button @click="open=true" class="-mt-6 h-14 w-14 rounded-full bg-brand-600 text-white shadow-lg shadow-brand-600/30 flex items-center justify-center active:scale-95 transition">
         <svg class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" d="M12 5v14M5 12h14"/></svg>
@@ -92,11 +87,20 @@ $navActive = function (string $prefix) use ($currentPath): string {
       <div x-show="open" x-transition.opacity @click="open=false; soon=''" style="display:none" class="fixed inset-0 z-40 bg-black/40 flex items-end sm:items-center justify-center">
         <div @click.stop class="w-full sm:max-w-sm bg-white rounded-t-2xl sm:rounded-2xl p-4 space-y-2">
           <p class="text-center text-sm font-semibold text-slate-500 pb-1">Quick actions</p>
+          <a href="<?= e(url('sales/create')) ?>" class="flex items-center gap-3 rounded-xl bg-brand-600 px-4 py-3 text-white">
+            <span class="text-xl">🧾</span><span class="font-medium">New Invoice</span>
+          </a>
+          <a href="<?= e(url('expenses/create')) ?>" class="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3 hover:bg-slate-100">
+            <span class="text-xl">💸</span><span class="font-medium">Record Expense</span>
+          </a>
           <a href="<?= e(url('products/create')) ?>" class="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3 hover:bg-slate-100">
             <span class="text-xl">➕</span><span class="font-medium">Add Product</span>
           </a>
           <a href="<?= e(url('calculator')) ?>" class="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3 hover:bg-slate-100">
             <span class="text-xl">🧮</span><span class="font-medium">Cost Calculator</span>
+          </a>
+          <a href="<?= e(url('purchases/local')) ?>" class="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3 hover:bg-slate-100">
+            <span class="text-xl">🏪</span><span class="font-medium">Local Purchase</span>
           </a>
           <a href="<?= e(url('purchases/import')) ?>" class="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3 hover:bg-slate-100">
             <span class="text-xl">📦</span><span class="font-medium">Import Invoice</span>
@@ -105,21 +109,43 @@ $navActive = function (string $prefix) use ($currentPath): string {
             <span class="text-xl">✅</span><span class="font-medium">Verify Arrival</span>
           </a>
           <a href="<?= e(url('notes')) ?>" class="flex items-center gap-3 rounded-xl bg-slate-50 px-4 py-3 hover:bg-slate-100">
-            <span class="text-xl">🧮</span><span class="font-medium">Calculation Note</span>
+            <span class="text-xl">📝</span><span class="font-medium">Calculation Note</span>
           </a>
+
+          <div class="grid grid-cols-2 gap-2 pt-1">
+            <a href="<?= e(url('products')) ?>" class="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2.5 hover:bg-slate-100">
+              <span class="text-lg">👟</span><span class="text-sm font-medium">Products</span>
+            </a>
+            <a href="<?= e(url('cheques')) ?>" class="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2.5 hover:bg-slate-100">
+              <span class="text-lg">🏦</span><span class="text-sm font-medium">Cheques</span>
+            </a>
+            <a href="<?= e(url('expenses')) ?>" class="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2.5 hover:bg-slate-100">
+              <span class="text-lg">💸</span><span class="text-sm font-medium">Expenses</span>
+            </a>
+            <a href="<?= e(url('intelligence')) ?>" class="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2.5 hover:bg-slate-100">
+              <span class="text-lg">🧠</span><span class="text-sm font-medium">Insights</span>
+            </a>
+            <a href="<?= e(url('purchases')) ?>" class="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2.5 hover:bg-slate-100">
+              <span class="text-lg">🚢</span><span class="text-sm font-medium">Purchases</span>
+            </a>
+            <a href="<?= e(url('reports')) ?>" class="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2.5 hover:bg-slate-100">
+              <span class="text-lg">📊</span><span class="text-sm font-medium">Reports</span>
+            </a>
+          </div>
+
           <p x-show="soon" x-transition style="display:none" class="rounded-lg bg-slate-800 px-3 py-2 text-center text-xs text-white" x-text="soon"></p>
           <button @click="open=false; soon=''" class="w-full mt-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-500">Close</button>
         </div>
       </div>
     </div>
 
-    <a href="<?= e(url('calculator')) ?>" class="flex flex-col items-center justify-center gap-0.5 <?= $navActive('/calculator') ?>">
-      <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 6h8M8 10h.01M12 10h.01M16 10h.01M8 14h.01M12 14h.01M8 18h4M6 3h12v18H6z"/></svg>
-      <span class="text-[11px]">Cost</span>
+    <a href="<?= e(url('customers')) ?>" class="flex flex-col items-center justify-center gap-0.5 <?= $navActive('/customers') ?>">
+      <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.5a3 3 0 0 0-3-3H8.25a3 3 0 0 0-3 3M18.75 12.75h3m-9.75-6a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></svg>
+      <span class="text-[11px]">Customers</span>
     </a>
-    <a href="<?= e(url($isAdmin ? 'settings' : '')) ?>" class="flex flex-col items-center justify-center gap-0.5 <?= $navActive('/settings') ?>">
-      <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9M10.5 18h9M4.5 12h15M6.5 6a1.5 1.5 0 1 0 0 .01M14.5 12a1.5 1.5 0 1 0 0 .01M8.5 18a1.5 1.5 0 1 0 0 .01"/></svg>
-      <span class="text-[11px]"><?= $isAdmin ? 'Settings' : 'More' ?></span>
+    <a href="<?= e(url('finance')) ?>" class="flex flex-col items-center justify-center gap-0.5 <?= $navActive('/finance') ?>">
+      <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 17.25 9 11.25l3.75 3.75L21 6.75M21 6.75h-5.25M21 6.75V12"/></svg>
+      <span class="text-[11px]">Finance</span>
     </a>
   </div>
 </nav>

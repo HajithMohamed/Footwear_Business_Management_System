@@ -2,102 +2,130 @@
 
 namespace App\Controllers;
 
-use App\Models\Customer;
-use App\Models\CustomerTransaction;
-use App\Models\CustomerIntelligence;
 use App\Core\Controller;
 use App\Core\Request;
+use App\Core\Session;
+use App\Models\Customer;
+use App\Models\CustomerIntelligence;
+use App\Models\CustomerTransaction;
+use App\Models\Sale;
+use App\Services\CustomerIntelligenceService;
 
 class LedgerController extends Controller
 {
+    private const CLASSIFICATIONS = ['vip', 'regular', 'at_risk', 'dormant', 'prospect'];
+
     public function byCustomer(Request $request, array $params): void
     {
         $customerId = (int) $params['customerId'];
-        $customerModel = new Customer();
-        $customer = $customerModel->getById($customerId);
+        $customer   = (new Customer())->getById($customerId);
 
         if (!$customer) {
             $this->abort(404, 'Customer not found');
         }
 
-        $txnModel = new CustomerTransaction();
+        $txnModel     = new CustomerTransaction();
         $transactions = $txnModel->byCustomer($customerId, 100);
-        $summary = $txnModel->summarizeByType($customerId);
+        $summary      = $txnModel->summarizeByType($customerId);
 
-        $totalSales = 0;
-        $totalPayments = 0;
-        $totalCredits = 0;
-
+        $totals = ['sale' => 0.0, 'payment' => 0.0, 'credit_memo' => 0.0];
         foreach ($summary as $row) {
-            if ($row['transaction_type'] === 'sale') $totalSales = (float) $row['total'];
-            if ($row['transaction_type'] === 'payment') $totalPayments = (float) $row['total'];
-            if ($row['transaction_type'] === 'credit_memo') $totalCredits = (float) $row['total'];
+            if (array_key_exists($row['transaction_type'], $totals)) {
+                $totals[$row['transaction_type']] = (float) $row['total'];
+            }
         }
 
-        $balance = $txnModel->currentBalance($customerId);
-
         $this->view('ledger/customer', [
-            'title' => 'Ledger — ' . $customer['name'],
-            'customer' => $customer,
-            'transactions' => $transactions,
-            'total_sales' => $totalSales,
-            'total_payments' => $totalPayments,
-            'total_credits' => $totalCredits,
-            'balance' => $balance
+            'title'          => 'Ledger — ' . $customer['name'],
+            'customer'       => $customer,
+            'transactions'   => $transactions,
+            'total_sales'    => $totals['sale'],
+            'total_payments' => $totals['payment'],
+            'total_credits'  => $totals['credit_memo'],
+            'balance'        => $txnModel->currentBalance($customerId),
+            'invoices'       => (new Sale())->byCustomer($customerId, 20),
         ]);
     }
 
     public function intelligence(Request $request): void
     {
-        $intelModel = new CustomerIntelligence();
-        $stats = $intelModel->stats();
-        $vips = $intelModel->vipCustomers(20);
-        $atRisk = $intelModel->atRiskCustomers(20);
-        $dormant = $intelModel->dormantCustomers(20);
-        $overdue = $intelModel->overdue(30, 20);
+        $intel = new CustomerIntelligence();
 
         $this->view('intelligence/index', [
-            'title' => 'Customer Intelligence',
-            'stats' => $stats,
-            'vips' => $vips,
-            'at_risk' => $atRisk,
-            'dormant' => $dormant,
-            'overdue' => $overdue
+            'title'    => 'Customer Intelligence',
+            'stats'    => $intel->stats(),
+            'vips'     => $intel->vipCustomers(10),
+            'at_risk'  => $intel->atRiskCustomers(10),
+            'dormant'  => $intel->dormantCustomers(10),
+            'overdue'  => $intel->overdue(1, 10),
+            'reliable' => $intel->reliablePayers(10),
+            'frequent' => $intel->mostFrequent(10),
+            'stale'    => $intel->staleDebtors(10),
         ]);
     }
 
     public function byClassification(Request $request, array $params): void
     {
-        $classification = $params['classification'];
-        $intelModel = new CustomerIntelligence();
-        $customers = $intelModel->byClassification($classification, 100);
+        $classification = (string) $params['classification'];
+        if (!in_array($classification, self::CLASSIFICATIONS, true)) {
+            $this->abort(404, 'Unknown classification');
+        }
 
-        $this->view('intelligence/classification', [
-            'title' => ucfirst($classification) . ' Customers',
-            'classification' => $classification,
-            'customers' => $customers
+        $this->view('intelligence/list', [
+            'title'     => ucfirst(str_replace('_', ' ', $classification)) . ' customers',
+            'subtitle'  => $this->describe($classification),
+            'customers' => (new CustomerIntelligence())->byClassification($classification, 200),
         ]);
     }
 
     public function topCustomers(Request $request): void
     {
-        $intelModel = new CustomerIntelligence();
-        $customers = $intelModel->topByLifetimeValue(20);
-
-        $this->view('intelligence/top', [
-            'title' => 'Top Customers (Lifetime Value)',
-            'customers' => $customers
+        $this->view('intelligence/list', [
+            'title'     => 'Top customers',
+            'subtitle'  => 'Ranked by everything they have ever bought',
+            'customers' => (new CustomerIntelligence())->topByLifetimeValue(50),
         ]);
     }
 
     public function overdue(Request $request): void
     {
-        $intelModel = new CustomerIntelligence();
-        $customers = $intelModel->overdue(30, 50);
-
-        $this->view('intelligence/overdue', [
-            'title' => 'Overdue Customers',
-            'customers' => $customers
+        $this->view('intelligence/list', [
+            'title'     => 'Overdue customers',
+            'subtitle'  => 'Money past its agreed payment date, oldest first',
+            'customers' => (new CustomerIntelligence())->overdue(1, 200),
         ]);
+    }
+
+    public function staleDebtors(Request $request): void
+    {
+        $days = max(1, (int) setting('dormant_after_days', 60));
+
+        $this->view('intelligence/list', [
+            'title'     => 'Gone quiet, still owing',
+            'subtitle'  => "No purchase in over {$days} days but the account is not clear",
+            'customers' => (new CustomerIntelligence())->staleDebtors(200),
+        ]);
+    }
+
+    /** Rebuild every customer's metrics from sales, payments and cheques. */
+    public function recompute(Request $request): void
+    {
+        $count = (new CustomerIntelligenceService())->recomputeAll();
+
+        $this->log('intelligence.recomputed', null, null, ['customers' => $count]);
+        Session::flash('success', "Recalculated {$count} customer(s) from their sales and payments.");
+        $this->redirect('intelligence');
+    }
+
+    private function describe(string $classification): string
+    {
+        return match ($classification) {
+            'vip'      => 'High lifetime value with a clean payment record',
+            'regular'  => 'Buying recently and paying acceptably',
+            'at_risk'  => 'Seriously overdue or repeatedly defaulting — check before extending more credit',
+            'dormant'  => 'Has not bought for a while',
+            'prospect' => 'On the books but has never bought',
+            default    => '',
+        };
     }
 }

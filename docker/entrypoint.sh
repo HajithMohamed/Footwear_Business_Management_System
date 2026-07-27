@@ -7,7 +7,7 @@ cd /var/www/html
 
 # Build .env from environment variables (bulletproof config resolution).
 cat > .env <<EOF
-APP_NAME=${APP_NAME:-Footwear Wholesale ERP}
+APP_NAME=${APP_NAME:-Shoe Bank}
 APP_ENV=${APP_ENV:-local}
 APP_DEBUG=${APP_DEBUG:-true}
 APP_URL=${APP_URL:-http://localhost:8080}

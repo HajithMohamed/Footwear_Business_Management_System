@@ -6,7 +6,7 @@
 
 return [
     'app' => [
-        'name'     => env('APP_NAME', 'Footwear Wholesale ERP'),
+        'name'     => env('APP_NAME', 'Shoe Bank'),
         'env'      => env('APP_ENV', 'production'),
         'debug'    => filter_var(env('APP_DEBUG', 'false'), FILTER_VALIDATE_BOOL),
         'url'      => rtrim(env('APP_URL', ''), '/'),

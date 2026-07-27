@@ -1,100 +1,139 @@
+<?php
+use App\Services\StorageService;
+
+$statusMeta = [
+    'pending'   => ['⏳', 'Pending',   'bg-amber-100 text-amber-700'],
+    'cleared'   => ['✅', 'Cleared',   'bg-green-100 text-green-700'],
+    'bounced'   => ['❌', 'Bounced',   'bg-red-100 text-red-700'],
+    'cancelled' => ['🚫', 'Cancelled', 'bg-slate-100 text-slate-700'],
+];
+$countFor = function (string $status) use ($stats): int {
+    foreach ($stats ?? [] as $s) {
+        if ($s['status'] === $status) {
+            return (int) $s['count'];
+        }
+    }
+    return 0;
+};
+?>
 <div class="mb-4">
   <h1 class="text-lg font-bold text-slate-800">Cheques</h1>
+  <p class="text-sm text-slate-500">Nothing sits in the drawer past its date</p>
 </div>
 
-<!-- Status cards -->
-<div class="grid gap-3 sm:grid-cols-4 mb-4">
-  <?php foreach ([
-    'pending' => ['icon' => '⏳', 'label' => 'Pending', 'color' => 'bg-amber-100 text-amber-700'],
-    'cleared' => ['icon' => '✅', 'label' => 'Cleared', 'color' => 'bg-green-100 text-green-700'],
-    'bounced' => ['icon' => '❌', 'label' => 'Bounced', 'color' => 'bg-red-100 text-red-700'],
-    'cancelled' => ['icon' => '🚫', 'label' => 'Cancelled', 'color' => 'bg-slate-100 text-slate-700']
-  ] as $status => $config): ?>
-    <?php $count = 0; foreach ($stats ?? [] as $s) { if ($s['status'] === $status) { $count = (int)$s['count']; break; }} ?>
-    <a href="<?= e(url("cheques?status={$status}")) ?>" class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100 active:scale-[.99] transition">
-      <div class="text-2xl mb-1"><?= $config['icon'] ?></div>
-      <p class="text-xs font-medium text-slate-400"><?= $config['label'] ?></p>
-      <p class="mt-1 text-2xl font-bold <?= $config['color'] ?>"><?= $count ?></p>
+<!-- Money tied up -->
+<div class="grid grid-cols-2 gap-3">
+  <div class="rounded-2xl bg-amber-50 p-4 ring-1 ring-amber-100">
+    <p class="text-[11px] font-medium text-amber-600">Waiting to clear</p>
+    <p class="mt-1 text-xl font-bold text-amber-800"><?= money($summary['pending_value'] ?? 0) ?></p>
+    <p class="text-[11px] text-amber-600"><?= (int) ($summary['pending_count'] ?? 0) ?> cheque(s)</p>
+  </div>
+  <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
+    <p class="text-[11px] font-medium text-slate-400">Bounced</p>
+    <p class="mt-1 text-xl font-bold <?= (int) ($summary['bounced_count'] ?? 0) > 0 ? 'text-red-700' : 'text-slate-800' ?>">
+      <?= money($summary['bounced_value'] ?? 0) ?>
+    </p>
+    <p class="text-[11px] text-slate-400"><?= (int) ($summary['bounced_count'] ?? 0) ?> cheque(s)</p>
+  </div>
+</div>
+
+<!-- Reminder: what needs banking -->
+<?php if (!empty($dueSoon)): ?>
+  <div class="mt-3 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">
+    <div class="border-b border-slate-100 bg-amber-50 px-4 py-3">
+      <h2 class="text-sm font-semibold text-amber-800">🔔 Bank these now</h2>
+      <p class="text-[11px] text-amber-600">Due within <?= (int) $reminderDays ?> days, or already past</p>
+    </div>
+    <ul class="divide-y divide-slate-50">
+      <?php foreach ($dueSoon as $c): ?>
+        <?php $late = (int) $c['days_until'] < 0; ?>
+        <li>
+          <a href="<?= e(url("cheques/{$c['id']}")) ?>" class="flex items-center justify-between gap-3 px-4 py-3">
+            <div class="min-w-0">
+              <p class="truncate text-sm font-medium text-slate-800"><?= e($c['customer_name']) ?></p>
+              <p class="text-[11px] text-slate-400">
+                #<?= e($c['cheque_number']) ?><?= $c['bank_name'] ? ' · ' . e($c['bank_name']) : '' ?>
+                · <?= e(date('d M Y', strtotime($c['due_on']))) ?>
+              </p>
+            </div>
+            <div class="shrink-0 text-right">
+              <p class="text-sm font-bold text-slate-800"><?= money($c['amount']) ?></p>
+              <p class="text-[10px] font-semibold <?= $late ? 'text-red-600' : 'text-amber-600' ?>">
+                <?= $late
+                      ? abs((int) $c['days_until']) . ' day(s) late'
+                      : ((int) $c['days_until'] === 0 ? 'Today' : 'In ' . (int) $c['days_until'] . ' day(s)') ?>
+              </p>
+            </div>
+          </a>
+        </li>
+      <?php endforeach; ?>
+    </ul>
+  </div>
+<?php endif; ?>
+
+<!-- Status filter -->
+<div class="mt-4 flex gap-2 overflow-x-auto pb-2">
+  <?php foreach ($statusMeta as $status => [$icon, $label, ]): ?>
+    <a href="<?= e(url("cheques?status={$status}")) ?>"
+       class="whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium <?= $filter_status === $status ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200' ?>">
+      <?= $icon ?> <?= $label ?> (<?= $countFor($status) ?>)
     </a>
   <?php endforeach; ?>
 </div>
 
-<!-- Cheques list -->
+<!-- List -->
 <?php if (!empty($cheques)): ?>
-  <div class="rounded-2xl bg-white shadow-sm ring-1 ring-slate-100 overflow-hidden">
-    <table class="w-full text-sm">
-      <thead class="border-b border-slate-100 bg-slate-50">
-        <tr>
-          <th class="px-4 py-3 text-left font-semibold text-slate-700">Cheque No.</th>
-          <th class="px-4 py-3 text-left font-semibold text-slate-700">Customer</th>
-          <th class="px-4 py-3 text-left font-semibold text-slate-700">Bank</th>
-          <th class="px-4 py-3 text-left font-semibold text-slate-700">Amount</th>
-          <th class="px-4 py-3 text-left font-semibold text-slate-700">Cheque Date</th>
-          <th class="px-4 py-3 text-left font-semibold text-slate-700">Status</th>
-          <th class="px-4 py-3 text-left font-semibold text-slate-700"></th>
-        </tr>
-      </thead>
-      <tbody class="divide-y divide-slate-50">
-        <?php foreach ($cheques as $ch): ?>
-          <tr class="hover:bg-slate-50">
-            <td class="px-4 py-3 font-medium text-slate-700"><?= e($ch['cheque_number']) ?></td>
-            <td class="px-4 py-3"><a href="<?= e(url("customers/{$ch['customer_id']}")) ?>" class="text-brand-600 hover:underline"><?= e($ch['customer_name']) ?></a></td>
-            <td class="px-4 py-3 text-slate-600"><?= e($ch['bank_name'] ?? '—') ?></td>
-            <td class="px-4 py-3 font-medium">Rs. <?= number_format($ch['amount'], 2) ?></td>
-            <td class="px-4 py-3 text-slate-500 text-xs"><?= date('M d, Y', strtotime($ch['cheque_date'])) ?></td>
-            <td class="px-4 py-3">
-              <span class="inline-block px-2 py-1 rounded text-xs font-semibold
-                <?= match($ch['status']) {
-                  'pending' => 'bg-amber-100 text-amber-700',
-                  'cleared' => 'bg-green-100 text-green-700',
-                  'bounced' => 'bg-red-100 text-red-700',
-                  'cancelled' => 'bg-slate-100 text-slate-700',
-                  default => ''
-                } ?>">
-                <?= ucfirst($ch['status']) ?>
-              </span>
-            </td>
-            <td class="px-4 py-3 text-right">
-              <button @click="showUpdate(<?= $ch['id'] ?>, '<?= e($ch['status']) ?>')" class="text-slate-400 hover:text-slate-600">⚙️</button>
-            </td>
-          </tr>
-        <?php endforeach; ?>
-      </tbody>
-    </table>
+  <div class="space-y-2 pb-4">
+    <?php foreach ($cheques as $c): ?>
+      <?php
+        $due       = $c['deposit_date'] ?: $c['cheque_date'];
+        $late      = $c['status'] === 'pending' && $due < date('Y-m-d');
+        $chipClass = $statusMeta[$c['status']][2] ?? 'bg-slate-100 text-slate-700';
+      ?>
+      <a href="<?= e(url("cheques/{$c['id']}")) ?>"
+         class="block rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100 active:scale-[.99] transition">
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex min-w-0 items-start gap-3">
+            <?php if (!empty($c['thumb_path'])): ?>
+              <img src="<?= e(StorageService::url($c['thumb_path'])) ?>" alt=""
+                   class="h-11 w-11 shrink-0 rounded-lg object-cover ring-1 ring-slate-100">
+            <?php endif; ?>
+            <div class="min-w-0">
+              <p class="truncate text-sm font-semibold text-slate-800"><?= e($c['customer_name']) ?></p>
+              <p class="text-[11px] text-slate-400">
+                #<?= e($c['cheque_number']) ?><?= $c['bank_name'] ? ' · ' . e($c['bank_name']) : '' ?>
+              </p>
+              <p class="text-[11px] text-slate-400">
+                Dated <?= e(date('d M Y', strtotime($c['cheque_date']))) ?>
+                <?php if ($c['deposit_date']): ?>
+                  · bank <?= e(date('d M Y', strtotime($c['deposit_date']))) ?>
+                <?php endif; ?>
+              </p>
+            </div>
+          </div>
+          <div class="shrink-0 text-right">
+            <p class="text-sm font-bold text-slate-800"><?= money($c['amount']) ?></p>
+            <span class="mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold <?= $chipClass ?>">
+              <?= ucfirst($c['status']) ?>
+            </span>
+          </div>
+        </div>
+        <?php if ($late): ?>
+          <p class="mt-2 rounded-lg bg-red-50 px-2.5 py-1.5 text-[11px] text-red-700">
+            ⚠ Should have been banked <?= (int) ((strtotime('today') - strtotime($due)) / 86400) ?> day(s) ago
+          </p>
+        <?php endif; ?>
+        <?php if ($c['status'] === 'bounced' && $c['bounce_reason']): ?>
+          <p class="mt-2 rounded-lg bg-red-50 px-2.5 py-1.5 text-[11px] text-red-700">
+            Bounced: <?= e($c['bounce_reason']) ?>
+          </p>
+        <?php endif; ?>
+      </a>
+    <?php endforeach; ?>
   </div>
 <?php else: ?>
   <div class="rounded-2xl bg-white p-8 text-center shadow-sm ring-1 ring-slate-100">
-    <p class="text-slate-500">No cheques found.</p>
+    <p class="text-slate-500">No <?= e($filter_status) ?> cheques.</p>
+    <p class="mt-2 text-xs text-slate-400">Cheques appear here when you record one as a customer payment.</p>
   </div>
 <?php endif; ?>
-
-<script>
-function showUpdate(id, status) {
-  const newStatus = prompt(`Current status: ${status}\n\nUpdate to:`, 'cleared');
-  if (!newStatus) return;
-  if (!['pending', 'cleared', 'bounced', 'cancelled'].includes(newStatus)) {
-    alert('Invalid status. Use: pending, cleared, bounced, cancelled');
-    return;
-  }
-  if (newStatus === 'bounced') {
-    const reason = prompt('Bounce reason:');
-    if (!reason) return;
-    submitStatusUpdate(id, newStatus, reason);
-  } else {
-    submitStatusUpdate(id, newStatus);
-  }
-}
-
-function submitStatusUpdate(id, status, reason = null) {
-  const form = document.createElement('form');
-  form.method = 'POST';
-  form.action = `/cheques/${id}/status`;
-  form.innerHTML = `
-    <input type="hidden" name="status" value="${status}">
-    ${reason ? `<input type="hidden" name="bounce_reason" value="${reason}">` : ''}
-    <input type="hidden" name="_token" value="${document.querySelector('input[name="_token"]')?.value || ''}">
-  `;
-  document.body.appendChild(form);
-  form.submit();
-}
-</script>

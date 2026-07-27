@@ -35,10 +35,11 @@
     <p class="text-xs font-medium text-red-600 uppercase">Outstanding</p>
     <p class="mt-1 text-lg font-bold text-red-700">Rs. <?= number_format(array_sum(array_column($customers, 'outstanding_due')), 0) ?></p>
   </div>
-  <div class="rounded-lg bg-amber-50 p-3 ring-1 ring-amber-100">
+  <a href="<?= e(url('cheques')) ?>" class="rounded-lg bg-amber-50 p-3 ring-1 ring-amber-100">
     <p class="text-xs font-medium text-amber-600 uppercase">Pending Cheques</p>
-    <p class="mt-1 text-2xl font-bold text-amber-700">18</p>
-  </div>
+    <p class="mt-1 text-2xl font-bold text-amber-700"><?= (int) ($chequeSummary['pending_count'] ?? 0) ?></p>
+    <p class="text-[11px] text-amber-600"><?= money($chequeSummary['pending_value'] ?? 0) ?></p>
+  </a>
 </div>
 
 <!-- Customer Cards -->

@@ -88,6 +88,48 @@ class StorageService
     }
 
     /**
+     * Store a photo of a cheque (original + thumbnail).
+     *
+     * Kept out of the purchase-document folders on purpose: a cheque image is
+     * customer financial data with a different retention story, and keeping it
+     * in its own tree makes it easy to purge separately.
+     *
+     * @return array{path:string,thumb_path:string,original_name:string}
+     */
+    public function storeChequeImage(array $file, int $chequeId): array
+    {
+        $mime     = $this->detectMime($file['tmp_name']);
+        $ext      = $this->extForMime($mime);
+        $origRel  = "cheques/{$chequeId}/original";
+        $thumbRel = "cheques/{$chequeId}/thumb";
+        $this->ensureDir($origRel);
+        $this->ensureDir($thumbRel);
+
+        $filename  = bin2hex(random_bytes(16)) . '.' . $ext;
+        $origPath  = "{$origRel}/{$filename}";
+        $thumbPath = "{$thumbRel}/{$filename}";
+
+        $processed = $this->processImage(
+            $file['tmp_name'],
+            $mime,
+            $this->diskRoot . '/' . $origPath,
+            $this->diskRoot . '/' . $thumbPath
+        );
+
+        if (!$processed) {
+            move_uploaded_file($file['tmp_name'], $this->diskRoot . '/' . $origPath)
+                || copy($file['tmp_name'], $this->diskRoot . '/' . $origPath);
+            $thumbPath = $origPath;
+        }
+
+        return [
+            'path'          => $origPath,
+            'thumb_path'    => $thumbPath,
+            'original_name' => substr((string) ($file['name'] ?? 'cheque'), 0, 200),
+        ];
+    }
+
+    /**
      * Validate a purchase document (invoice PDF/photo, clearance doc, parcel photo,
      * calculation note). Returns an error string or null if OK.
      */

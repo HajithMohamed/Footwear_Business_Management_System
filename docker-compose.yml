@@ -1,4 +1,4 @@
-# Footwear Wholesale ERP — full stack (PHP-Apache + MySQL 8)
+# Shoe Bank — full stack (PHP-Apache + MySQL 8)
 #
 #   docker compose up --build      # start (first run imports schema + seed)
 #   open http://localhost:8080     # login: admin / admin123
@@ -11,7 +11,7 @@ services:
     ports:
       - "8080:80"
     environment:
-      APP_NAME: "Footwear Wholesale ERP"
+      APP_NAME: "Shoe Bank"
       APP_ENV: local
       APP_DEBUG: "true"
       APP_URL: "http://localhost:8080"

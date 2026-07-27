@@ -38,6 +38,9 @@ class Router
 
     public function dispatch(Request $request): void
     {
+        // Share it, so the request() helper and views see the same request.
+        Request::setInstance($request);
+
         $method = $request->method();
         $path   = $request->path();
 

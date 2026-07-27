@@ -73,4 +73,16 @@
   <a href="<?= e(url('reports/receivables')) ?>" class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100 active:scale-[.99] transition hover:ring-brand-600">
     <div class="text-2xl">💰</div><p class="mt-1 text-sm font-medium text-slate-700">Receivables</p>
   </a>
+  <a href="<?= e(url('finance/profit-loss')) ?>" class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100 active:scale-[.99] transition hover:ring-brand-600">
+    <div class="text-2xl">🧾</div><p class="mt-1 text-sm font-medium text-slate-700">Profit &amp; loss</p>
+  </a>
+  <a href="<?= e(url('finance/brands')) ?>" class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100 active:scale-[.99] transition hover:ring-brand-600">
+    <div class="text-2xl">🏷️</div><p class="mt-1 text-sm font-medium text-slate-700">Brand profit</p>
+  </a>
+  <a href="<?= e(url('finance/products')) ?>" class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100 active:scale-[.99] transition hover:ring-brand-600">
+    <div class="text-2xl">👟</div><p class="mt-1 text-sm font-medium text-slate-700">Product profit</p>
+  </a>
+  <a href="<?= e(url('intelligence')) ?>" class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100 active:scale-[.99] transition hover:ring-brand-600">
+    <div class="text-2xl">🧠</div><p class="mt-1 text-sm font-medium text-slate-700">Customer insights</p>
+  </a>
 </div>

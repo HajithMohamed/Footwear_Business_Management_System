@@ -26,7 +26,8 @@ class CustomerController extends Controller
         $this->view('customers/index', [
             'title' => 'Customers',
             'customers' => $customers,
-            'filters' => $filters
+            'filters' => $filters,
+            'chequeSummary' => (new \App\Models\Cheque())->summary(),
         ]);
     }
 

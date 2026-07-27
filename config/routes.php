@@ -45,12 +45,29 @@ return function (Router $r): void {
     $r->post('/customers/{customerId}/payment',      'PaymentController@store',  ['auth']);
     $r->get('/customers/{customerId}/payments',      'PaymentController@byCustomer', ['auth']);
 
+    // --- Sales & invoicing (static segments must stay ABOVE /sales/{id}) ------
+    $r->get('/sales',              'SalesController@index',  ['auth']);
+    $r->get('/sales/create',       'SalesController@create', ['auth']);
+    $r->post('/sales',             'SalesController@store',  ['auth']);
+    $r->get('/sales/{id}',         'SalesController@show',   ['auth']);
+    $r->post('/sales/{id}/cancel', 'SalesController@cancel', ['auth']);
+
+    // --- Expenses ------------------------------------------------------------
+    $r->get('/expenses',              'ExpenseController@index',   ['auth']);
+    $r->get('/expenses/create',       'ExpenseController@create',  ['auth']);
+    $r->post('/expenses',             'ExpenseController@store',   ['auth']);
+    $r->get('/expenses/{id}/edit',    'ExpenseController@edit',    ['auth']);
+    $r->post('/expenses/{id}',        'ExpenseController@update',  ['auth']);
+    $r->post('/expenses/{id}/delete', 'ExpenseController@destroy', ['auth']);
+
     // --- Module 5: Import Purchase, Clearance & Goods Arrival ---------------
     // Purchases (static segments must stay ABOVE /purchases/{id})
     $r->get('/purchases',         'PurchaseController@index',      ['auth']);
     $r->get('/purchases/create',  'PurchaseController@create',     ['auth']);
     $r->get('/purchases/import',  'PurchaseController@importForm', ['auth']);
     $r->post('/purchases/import', 'PurchaseController@import',     ['auth']);
+    $r->get('/purchases/local',   'LocalPurchaseController@create', ['auth']);
+    $r->post('/purchases/local',  'LocalPurchaseController@store',  ['auth']);
     $r->post('/purchases',        'PurchaseController@store',      ['auth']);
     $r->get('/purchases/{id}',    'PurchaseController@show',       ['auth']);
 
@@ -95,14 +112,21 @@ return function (Router $r): void {
     // --- Cheques (standalone dashboard) --------------------------------------
     $r->get('/cheques',                    'ChequeController@index',         ['auth']);
     $r->get('/cheques/pending',            'ChequeController@pending',       ['auth']);
+    $r->get('/cheques/{id}',               'ChequeController@show',          ['auth']);
     $r->post('/cheques/{id}/status',       'ChequeController@updateStatus',  ['auth']);
+    $r->post('/cheques/{id}/deposit',      'ChequeController@setDeposit',    ['auth']);
+    $r->post('/cheques/{id}/image',        'ChequeController@uploadImage',   ['auth']);
 
-    // --- Customer Ledger & Intelligence (read-only) --------------------------
+    // --- Customer Ledger & Intelligence --------------------------------------
+    // Static segments must stay ABOVE /intelligence/{classification}, or they
+    // get swallowed as a classification name.
     $r->get('/customers/{customerId}/ledger',      'LedgerController@byCustomer', ['auth']);
     $r->get('/intelligence',                       'LedgerController@intelligence', ['auth']);
-    $r->get('/intelligence/{classification}',      'LedgerController@byClassification', ['auth']);
     $r->get('/intelligence/top',                   'LedgerController@topCustomers', ['auth']);
     $r->get('/intelligence/overdue',               'LedgerController@overdue', ['auth']);
+    $r->get('/intelligence/stale-debtors',         'LedgerController@staleDebtors', ['auth']);
+    $r->post('/intelligence/recompute',            'LedgerController@recompute', ['auth']);
+    $r->get('/intelligence/{classification}',      'LedgerController@byClassification', ['auth']);
 
     // --- Phase 5: Reports & accounting (read-only) ---------------------------
     $r->get('/reports',             'ReportController@index',       ['auth']);
@@ -111,6 +135,15 @@ return function (Router $r): void {
     $r->get('/reports/clearance',   'ReportController@clearance',   ['auth']);
     $r->get('/reports/costs',       'ReportController@costs',       ['auth']);
     $r->get('/reports/receivables', 'ReportController@receivables', ['auth']);
+
+    // --- Profit & loss -------------------------------------------------------
+    $r->get('/finance',                  'FinanceController@index',      ['auth']);
+    $r->get('/finance/profit-loss',      'FinanceController@profitLoss', ['auth']);
+    $r->get('/finance/sales-summary',    'FinanceController@salesSummary', ['auth']);
+    $r->get('/finance/brands',           'FinanceController@brands',     ['auth']);
+    $r->get('/finance/products',         'FinanceController@products',   ['auth']);
+    $r->get('/finance/customers',        'FinanceController@customers',  ['auth']);
+    $r->get('/finance/expenses',         'FinanceController@expenses',   ['auth']);
 
     // --- Settings (admin only) ----------------------------------------------
     $r->get('/settings',  'SettingController@index',  ['auth', 'admin']);

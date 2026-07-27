@@ -222,6 +222,7 @@ CREATE TABLE IF NOT EXISTS customers (
     region            VARCHAR(50) NULL,
     customer_type     ENUM('retail','wholesale') NOT NULL DEFAULT 'retail',
     credit_limit      DECIMAL(12,2) NOT NULL DEFAULT 0,
+    credit_period_days SMALLINT UNSIGNED NULL,        -- NULL = shop default setting
     outstanding_due   DECIMAL(12,2) NOT NULL DEFAULT 0,
     notes             TEXT NULL,
     created_by        INT UNSIGNED NULL,
@@ -257,10 +258,14 @@ CREATE TABLE IF NOT EXISTS cheques (
     payment_id        INT UNSIGNED NOT NULL,
     cheque_number     VARCHAR(30) NOT NULL,
     bank_name         VARCHAR(80) NULL,
-    cheque_date       DATE NOT NULL,
+    cheque_date       DATE NOT NULL,                 -- date written on the cheque
+    deposit_date      DATE NULL,                     -- when the owner plans to bank it
+    deposited_at      DATETIME NULL,                 -- when it was actually banked
     amount            DECIMAL(12,2) NOT NULL,
     status            ENUM('pending','cleared','bounced','cancelled') NOT NULL DEFAULT 'pending',
     bounce_reason     VARCHAR(255) NULL,
+    image_path        VARCHAR(255) NULL,
+    thumb_path        VARCHAR(255) NULL,
     status_updated_at DATETIME NULL,
     status_updated_by INT UNSIGNED NULL,
     created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -300,13 +305,21 @@ CREATE TABLE IF NOT EXISTS customer_intelligence (
     lifetime_value        DECIMAL(12,2) NOT NULL DEFAULT 0,
     total_purchases       INT NOT NULL DEFAULT 0,
     total_paid            DECIMAL(12,2) NOT NULL DEFAULT 0,
+    total_credit_sales    DECIMAL(14,2) NOT NULL DEFAULT 0,
+    total_cash_sales      DECIMAL(14,2) NOT NULL DEFAULT 0,
     average_order_value   DECIMAL(12,2) NOT NULL DEFAULT 0,
     last_purchase_date    DATE NULL,
+    last_payment_date     DATE NULL,
     days_since_purchase   INT NULL,
     purchase_frequency    INT NULL,
+    avg_payment_days      DECIMAL(6,1) NULL,          -- mean days from sale to settlement
+    on_time_rate          DECIMAL(5,2) NULL,          -- % of credit sales settled in time
+    payment_behaviour     ENUM('reliable','slow','defaulter','unknown') NOT NULL DEFAULT 'unknown',
     overdue_amount        DECIMAL(12,2) NOT NULL DEFAULT 0,
     overdue_days          INT NULL,
+    oldest_unpaid_date    DATE NULL,
     credit_utilization    DECIMAL(5,2) NOT NULL DEFAULT 0,
+    computed_at           DATETIME NULL,
     created_at            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
@@ -327,6 +340,9 @@ CREATE TABLE IF NOT EXISTS customer_intelligence (
 CREATE TABLE IF NOT EXISTS purchases (
     id                    INT UNSIGNED NOT NULL AUTO_INCREMENT,
     purchase_number       VARCHAR(30) NOT NULL,          -- auto: PUR-2026-000001
+    -- Imports arrive in INR through a clearance agent; local buys are already in
+    -- LKR and go straight to the shelf. One history, two shapes.
+    source                ENUM('import','local') NOT NULL DEFAULT 'import',
     supplier_name         VARCHAR(150) NOT NULL,
     supplier_invoice_no   VARCHAR(60) NULL,
     invoice_date          DATE NULL,
@@ -334,6 +350,7 @@ CREATE TABLE IF NOT EXISTS purchases (
     invoice_type          ENUM('pdf','image','handwritten','manual') NOT NULL DEFAULT 'manual',
     expected_arrival_date DATE NULL,
     total_invoice_value   DECIMAL(14,2) NOT NULL DEFAULT 0,
+    currency              ENUM('INR','LKR') NOT NULL DEFAULT 'INR',
     total_weight_kg       DECIMAL(10,2) NOT NULL DEFAULT 0,
     expected_parcels      SMALLINT UNSIGNED NOT NULL DEFAULT 0,
     notes                 TEXT NULL,
@@ -548,6 +565,123 @@ CREATE TABLE IF NOT EXISTS purchase_attachments (
     KEY idx_pattach_type (type),
     CONSTRAINT fk_pattach_purchase FOREIGN KEY (purchase_id) REFERENCES purchases (id) ON DELETE CASCADE,
     CONSTRAINT fk_pattach_user     FOREIGN KEY (uploaded_by) REFERENCES users (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================================
+-- Sales, Expenses & Profitability
+--
+-- Revenue and the cost of what was sold, plus the operating expenses that sit
+-- between gross and net profit. See migration 003 for the reasoning behind the
+-- snapshot columns.
+-- ============================================================================
+
+-- One invoice. Wholesale or retail, cash or credit.
+--
+-- total_cost is the landed cost of the goods on this invoice SNAPSHOTTED at the
+-- moment of sale — re-costing a shipment must never rewrite the profit on a
+-- sale that already happened.
+--
+-- `costed` is 0 when a line was sold from a product with no landed cost. Those
+-- invoices are still revenue but are excluded from profit, because counting
+-- their cost as zero would make the shop look more profitable than it is.
+CREATE TABLE IF NOT EXISTS sales (
+    id                INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    invoice_number    VARCHAR(30) NOT NULL,            -- auto: INV-2026-000001
+    customer_id       INT UNSIGNED NULL,               -- NULL = walk-in counter sale
+    customer_name     VARCHAR(100) NULL,               -- snapshot / walk-in name
+    sale_type         ENUM('wholesale','retail') NOT NULL DEFAULT 'wholesale',
+    payment_type      ENUM('cash','credit') NOT NULL DEFAULT 'credit',
+    sale_date         DATE NOT NULL,
+    due_date          DATE NULL,
+    subtotal          DECIMAL(14,2) NOT NULL DEFAULT 0,
+    discount_amount   DECIMAL(14,2) NOT NULL DEFAULT 0,
+    total_amount      DECIMAL(14,2) NOT NULL DEFAULT 0,
+    total_cost        DECIMAL(14,2) NOT NULL DEFAULT 0,
+    gross_profit      DECIMAL(14,2) NOT NULL DEFAULT 0,
+    amount_paid       DECIMAL(14,2) NOT NULL DEFAULT 0,
+    costed            TINYINT(1) NOT NULL DEFAULT 1,
+    status            ENUM('completed','cancelled') NOT NULL DEFAULT 'completed',
+    notes             TEXT NULL,
+    created_by        INT UNSIGNED NULL,
+    cancelled_at      DATETIME NULL,
+    cancelled_by      INT UNSIGNED NULL,
+    created_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_sales_invoice_number (invoice_number),
+    KEY idx_sales_customer (customer_id),
+    KEY idx_sales_date (sale_date),
+    KEY idx_sales_status (status),
+    KEY idx_sales_payment_type (payment_type),
+    KEY idx_sales_due (due_date),
+    CONSTRAINT fk_sales_customer     FOREIGN KEY (customer_id)   REFERENCES customers (id) ON DELETE SET NULL,
+    CONSTRAINT fk_sales_created_by   FOREIGN KEY (created_by)    REFERENCES users (id)     ON DELETE SET NULL,
+    CONSTRAINT fk_sales_cancelled_by FOREIGN KEY (cancelled_by)  REFERENCES users (id)     ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Invoice lines. STOCK MOVES IN SETS, MONEY IS PER PAIR — the same split the
+-- stock valuation and the cost calculator use.
+CREATE TABLE IF NOT EXISTS sale_items (
+    id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    sale_id        INT UNSIGNED NOT NULL,
+    product_id     INT UNSIGNED NULL,
+    art_no         VARCHAR(60)  NULL,
+    product_name   VARCHAR(150) NULL,
+    brand_id       SMALLINT UNSIGNED NULL,
+    brand_name     VARCHAR(80)  NULL,
+    colour         VARCHAR(60)  NULL,
+    sets           INT NOT NULL DEFAULT 0,
+    pairs_in_set   TINYINT UNSIGNED NOT NULL DEFAULT 1,
+    pairs          INT NOT NULL DEFAULT 0,
+    unit_price     DECIMAL(12,2) NOT NULL DEFAULT 0,  -- per pair
+    unit_cost      DECIMAL(12,2) NULL,                -- per pair, landed, at sale time
+    line_total     DECIMAL(14,2) NOT NULL DEFAULT 0,
+    line_cost      DECIMAL(14,2) NULL,
+    line_profit    DECIMAL(14,2) NULL,
+    sort_order     SMALLINT NOT NULL DEFAULT 0,
+    created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_sitem_sale (sale_id),
+    KEY idx_sitem_product (product_id),
+    KEY idx_sitem_brand (brand_id),
+    CONSTRAINT fk_sitem_sale    FOREIGN KEY (sale_id)    REFERENCES sales (id)    ON DELETE CASCADE,
+    CONSTRAINT fk_sitem_product FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE SET NULL,
+    CONSTRAINT fk_sitem_brand   FOREIGN KEY (brand_id)   REFERENCES brands (id)   ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS expense_categories (
+    id          SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    name        VARCHAR(60) NOT NULL,
+    is_active   TINYINT(1) NOT NULL DEFAULT 1,
+    sort_order  SMALLINT NOT NULL DEFAULT 0,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_expense_category_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Operating expenses: everything between gross profit and net profit.
+CREATE TABLE IF NOT EXISTS expenses (
+    id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    expense_date   DATE NOT NULL,
+    category_id    SMALLINT UNSIGNED NULL,
+    amount         DECIMAL(14,2) NOT NULL DEFAULT 0,
+    payment_method ENUM('cash','bank_transfer','cheque','card','other') NOT NULL DEFAULT 'cash',
+    payee          VARCHAR(120) NULL,
+    reference      VARCHAR(100) NULL,
+    description    VARCHAR(255) NULL,
+    reference_type VARCHAR(40) NULL,
+    reference_id   INT UNSIGNED NULL,
+    created_by     INT UNSIGNED NULL,
+    created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at     DATETIME NULL,
+    PRIMARY KEY (id),
+    KEY idx_expenses_date (expense_date),
+    KEY idx_expenses_category (category_id),
+    KEY idx_expenses_deleted (deleted_at),
+    KEY idx_expenses_ref (reference_type, reference_id),
+    CONSTRAINT fk_expenses_category   FOREIGN KEY (category_id) REFERENCES expense_categories (id) ON DELETE SET NULL,
+    CONSTRAINT fk_expenses_created_by FOREIGN KEY (created_by)  REFERENCES users (id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 SET FOREIGN_KEY_CHECKS = 1;

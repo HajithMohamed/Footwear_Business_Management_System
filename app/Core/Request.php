@@ -7,11 +7,30 @@ namespace App\Core;
  */
 class Request
 {
+    private static ?Request $instance = null;
+
     private array $get;
     private array $post;
     private array $files;
     private string $method;
     private string $path;
+
+    /**
+     * The current request, for the `request()` helper and views.
+     *
+     * The constructor only reads superglobals, so sharing one instance is safe
+     * and keeps views from re-parsing the JSON body on every call.
+     */
+    public static function instance(): Request
+    {
+        return self::$instance ??= new self();
+    }
+
+    /** Let the router register the instance it built as the shared one. */
+    public static function setInstance(Request $request): void
+    {
+        self::$instance = $request;
+    }
 
     public function __construct()
     {
