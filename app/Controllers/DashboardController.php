@@ -24,15 +24,9 @@ class DashboardController extends Controller
 
         $this->view('dashboard/index', [
             'title' => 'Dashboard',
-            'stats' => [
-                'total_products' => $products->totalActive(),
-                'low_stock'      => $products->lowStockCount(),
-                'out_of_stock'   => $products->outOfStockCount(),
-            ],
-            'lowStock' => $products->lowStockList(8),
-
             // Money: this month's trading, plus what is owed and what is due
             'money'        => $profit->summary(date('Y-m-01'), date('Y-m-d')),
+            'cashToday'    => $profit->cashCollected(date('Y-m-d'), date('Y-m-d')),
             'periods'      => $profit->periodRevenue(),
             'receivables'  => $profit->receivables(),
             'recentSales'  => (new Sale())->recent(5),
