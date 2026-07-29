@@ -78,6 +78,33 @@
   </div>
 <?php endif; ?>
 
+<?php if (!empty($overdueCustomers)): ?>
+  <div class="mt-3 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">
+    <div class="border-b border-slate-100 bg-amber-50 px-4 py-3 flex justify-between items-center">
+      <h2 class="text-sm font-semibold text-amber-800">Overdue Customer Accounts</h2>
+      <span class="rounded-full bg-amber-200 text-amber-800 text-xs px-2 py-0.5 font-medium">> 30 days</span>
+    </div>
+    <ul class="divide-y divide-slate-50">
+      <?php foreach ($overdueCustomers as $oc): ?>
+        <li>
+          <a href="<?= e(url("customers/{$oc['id']}")) ?>" class="flex items-center justify-between gap-3 px-4 py-2.5 hover:bg-slate-50">
+            <div class="min-w-0">
+              <p class="truncate text-sm font-medium text-slate-800">👤 <?= e($oc['name']) ?></p>
+              <p class="text-[11px] text-slate-400">
+                <?= e($oc['phone'] ?: 'No phone') ?> · Last paid <?= e(date('j M Y', strtotime($oc['oldest_unpaid_date']))) ?>
+              </p>
+            </div>
+            <div class="shrink-0 text-right">
+                <span class="block text-sm font-semibold text-amber-600"><?= money($oc['outstanding_due']) ?></span>
+                <span class="block text-[11px] text-slate-500 font-medium mt-0.5"><?= (int) $oc['days_overdue'] ?> days overdue</span>
+            </div>
+          </a>
+        </li>
+      <?php endforeach; ?>
+    </ul>
+  </div>
+<?php endif; ?>
+
 <!-- Primary stat cards -->
 <div class="mt-3 grid grid-cols-2 gap-3">
   <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100">

@@ -38,6 +38,7 @@ class DashboardController extends Controller
             'recentSales'  => (new Sale())->recent(5),
             'overdueSales' => (new Sale())->overdueCredit(5),
             'chequesDue'   => (new Cheque())->dueSoon((int) setting('cheque_reminder_days', 7), 5),
+            'overdueCustomers' => (new \App\Models\Customer())->getOverdueCustomers(30, 5),
 
             // Module 5 — import purchase / clearance / arrival
             'importStats'        => $purchases->stats(),

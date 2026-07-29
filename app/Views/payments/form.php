@@ -17,7 +17,12 @@
       <input type="number" name="amount" step="0.01" required min="0" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600">
     </div>
 
-    <div class="sm:col-span-2">
+    <div class="sm:col-span-1">
+      <label class="block text-sm font-semibold text-slate-700 mb-1">Payment Date *</label>
+      <input type="date" name="payment_date" value="<?= date('Y-m-d') ?>" required class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-600">
+    </div>
+
+    <div class="sm:col-span-1">
       <label class="block text-sm font-semibold text-slate-700 mb-1">Payment Method *</label>
       <select name="payment_method" required @change="method = $event.target.value" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
         <option value="cash">Cash</option>

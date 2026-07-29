@@ -68,4 +68,24 @@ class Customer extends Model
     {
         $this->db()->update('customers', ['outstanding_due' => $amount], ['id' => $id]);
     }
+
+    public function getOverdueCustomers(int $days = 30, int $limit = 10): array
+    {
+        // Customers with outstanding balances where oldest unpaid date is older than $days.
+        // We use the customer_intelligence table which tracks oldest_unpaid_date.
+        // It should be refreshed if possible, but this uses the cached values.
+        return $this->db()->all(
+            "SELECT c.id, c.name, c.phone, c.outstanding_due, i.oldest_unpaid_date,
+                    DATEDIFF(NOW(), i.oldest_unpaid_date) AS days_overdue
+             FROM customers c
+             JOIN customer_intelligence i ON c.id = i.customer_id
+             WHERE c.deleted_at IS NULL
+               AND c.outstanding_due > 0
+               AND i.oldest_unpaid_date IS NOT NULL
+               AND DATEDIFF(NOW(), i.oldest_unpaid_date) >= ?
+             ORDER BY days_overdue DESC, c.outstanding_due DESC
+             LIMIT ?",
+            [$days, $limit]
+        );
+    }
 }
