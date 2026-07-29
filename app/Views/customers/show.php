@@ -14,6 +14,17 @@
   <a href="<?= e(url("customers/{$customer['id']}/payment")) ?>" class="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-center text-sm font-medium text-white hover:bg-blue-700">💵 Payment</a>
 </div>
 
+<div class="mb-4 grid grid-cols-2 gap-2">
+  <a href="<?= e(url("customers/{$customer['id']}/bill")) ?>"
+     class="rounded-lg bg-amber-100 px-3 py-2 text-center text-sm font-medium text-amber-700 hover:bg-amber-200">
+    Attach bill
+  </a>
+  <a href="<?= e(url("customers/{$customer['id']}/ledger")) ?>"
+     class="rounded-lg bg-slate-100 px-3 py-2 text-center text-sm font-medium text-slate-700 hover:bg-slate-200">
+    Full ledger
+  </a>
+</div>
+
 <!-- Financial Summary -->
 <div class="grid gap-3 sm:grid-cols-3 mb-4">
   <div class="rounded-lg bg-red-50 p-4 ring-1 ring-red-100">
@@ -55,10 +66,17 @@
       <?php if (!empty($transactions)): ?>
         <div class="space-y-2">
           <?php foreach (array_slice($transactions, 0, 20) as $txn): ?>
+            <?php $txnDate = $txn['transaction_date'] ?? substr((string) $txn['created_at'], 0, 10); ?>
             <div class="flex items-center justify-between p-3 hover:bg-slate-50 rounded">
               <div class="flex-1 min-w-0">
-                <p class="text-xs font-medium text-slate-500"><?= date('M d', strtotime($txn['created_at'])) ?></p>
+                <p class="text-xs font-medium text-slate-500"><?= date('M d', strtotime($txnDate)) ?></p>
                 <p class="text-sm font-medium text-slate-800"><?= e($txn['description'] ?? ucwords(str_replace('_', ' ', $txn['transaction_type']))) ?></p>
+                <?php if (!empty($txn['bill_number']) || !empty($txn['due_date'])): ?>
+                  <p class="text-[11px] text-slate-400">
+                    <?= !empty($txn['bill_number']) ? 'Bill #' . e($txn['bill_number']) : '' ?>
+                    <?= !empty($txn['due_date']) ? ' Due ' . e(date('d M Y', strtotime($txn['due_date']))) : '' ?>
+                  </p>
+                <?php endif; ?>
               </div>
               <div class="text-right">
                 <p class="text-sm font-bold <?= $txn['transaction_type'] === 'payment' || $txn['transaction_type'] === 'credit_memo' ? 'text-green-600' : 'text-red-600' ?>">

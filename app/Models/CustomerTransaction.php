@@ -8,6 +8,8 @@ class CustomerTransaction extends Model
 {
     protected string $table = 'customer_transactions';
 
+    private const MANUAL_BILL_REF = 'manual_bill';
+
     public function create(array $data): int
     {
         return $this->db()->insert('customer_transactions', $data);
@@ -20,7 +22,7 @@ class CustomerTransaction extends Model
              FROM customer_transactions ct
              LEFT JOIN users u ON ct.created_by = u.id
              WHERE ct.customer_id = ?
-             ORDER BY ct.created_at DESC
+             ORDER BY COALESCE(ct.transaction_date, DATE(ct.created_at)) DESC, ct.created_at DESC, ct.id DESC
              LIMIT ?',
             [$customerId, $limit]
         );
@@ -29,10 +31,51 @@ class CustomerTransaction extends Model
     public function currentBalance(int $customerId): float
     {
         $result = $this->db()->first(
-            'SELECT running_balance FROM customer_transactions WHERE customer_id = ? ORDER BY created_at DESC LIMIT 1',
+            'SELECT running_balance FROM customer_transactions WHERE customer_id = ? ORDER BY created_at DESC, id DESC LIMIT 1',
             [$customerId]
         );
         return (float)($result['running_balance'] ?? 0);
+    }
+
+    public function manualBillExists(int $customerId, string $billNumber): bool
+    {
+        return (int) $this->db()->scalar(
+            'SELECT COUNT(*) FROM customer_transactions
+              WHERE customer_id = ?
+                AND reference_type = ?
+                AND bill_number = ?',
+            [$customerId, self::MANUAL_BILL_REF, $billNumber]
+        ) > 0;
+    }
+
+    public function postManualBill(
+        int $customerId,
+        string $billNumber,
+        string $billDate,
+        float $amount,
+        string $dueDate,
+        ?int $userId,
+        ?string $notes = null
+    ): int {
+        $balance = round($this->currentBalance($customerId) + $amount, 2);
+        $description = 'Manual bill #' . $billNumber;
+        if ($notes !== null && trim($notes) !== '') {
+            $description .= ' - ' . trim($notes);
+        }
+
+        return $this->create([
+            'customer_id'      => $customerId,
+            'transaction_type' => 'sale',
+            'amount'           => round($amount, 2),
+            'running_balance'  => $balance,
+            'transaction_date' => $billDate,
+            'reference_type'   => self::MANUAL_BILL_REF,
+            'reference_id'     => null,
+            'bill_number'      => $billNumber,
+            'due_date'         => $dueDate,
+            'description'      => $description,
+            'created_by'       => $userId,
+        ]);
     }
 
     public function summarizeByType(int $customerId): array

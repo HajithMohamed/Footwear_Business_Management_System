@@ -1,4 +1,10 @@
 <?php
+/** @var array $products */
+$products = $products ?? [];
+$customers = $customers ?? [];
+$customerId = isset($customerId) ? (int) $customerId : 0;
+$today = $today ?? date('Y-m-d');
+
 // Products are handed to Alpine as JSON so the line editor can price, cost and
 // stock-check a row without a round trip.
 $productJson = json_encode(array_map(fn ($p) => [

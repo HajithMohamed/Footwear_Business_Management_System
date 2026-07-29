@@ -1,6 +1,8 @@
 <div class="mb-4 flex items-center gap-3">
   <a href="<?= e(url("customers/{$customer['id']}")) ?>" class="text-2xl">←</a>
   <h1 class="text-lg font-bold text-slate-800"><?= e($title) ?></h1>
+  <a href="<?= e(url("customers/{$customer['id']}/bill")) ?>"
+     class="ml-auto rounded-lg bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-700">Attach bill</a>
 </div>
 
 <!-- Summary cards -->
@@ -42,8 +44,9 @@
       </thead>
       <tbody class="divide-y divide-slate-50">
         <?php foreach ($transactions as $txn): ?>
+          <?php $txnDate = $txn['transaction_date'] ?? substr((string) $txn['created_at'], 0, 10); ?>
           <tr class="hover:bg-slate-50">
-            <td class="px-4 py-3 text-slate-500 text-xs"><?= date('M d, Y', strtotime($txn['created_at'])) ?></td>
+            <td class="px-4 py-3 text-slate-500 text-xs"><?= date('M d, Y', strtotime($txnDate)) ?></td>
             <td class="px-4 py-3">
               <span class="inline-block px-2 py-1 rounded text-xs font-semibold
                 <?= match($txn['transaction_type']) {

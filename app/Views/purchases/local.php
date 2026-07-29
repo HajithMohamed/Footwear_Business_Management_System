@@ -1,4 +1,8 @@
 <?php
+$products = $products ?? [];
+$suppliers = $suppliers ?? [];
+$today = $today ?? date('Y-m-d');
+
 $productJson = json_encode(array_map(fn ($p) => [
     'id'    => (int) $p['id'],
     'label' => trim(($p['art_no'] ?: $p['name']) . ($p['brand_name'] ? ' · ' . $p['brand_name'] : '')),

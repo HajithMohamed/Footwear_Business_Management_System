@@ -40,6 +40,10 @@ return function (Router $r): void {
     $r->get('/customers/{id}',        'CustomerController@show',   ['auth']);  // must stay AFTER /create
     $r->post('/customers/{id}',       'CustomerController@update', ['auth']);
 
+    // --- Manual customer bills (credit tracking only) -----------------------
+    $r->get('/customers/{customerId}/bill',       'CustomerBillController@create', ['auth']);
+    $r->post('/customers/{customerId}/bill',      'CustomerBillController@store',  ['auth']);
+
     // --- Payments (within customer context) ----------------------------------
     $r->get('/customers/{customerId}/payment',       'PaymentController@create', ['auth']);
     $r->post('/customers/{customerId}/payment',      'PaymentController@store',  ['auth']);

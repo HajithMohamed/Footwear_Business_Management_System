@@ -107,6 +107,9 @@
           <a href="<?= e(url("customers/{$c['id']}/payment")) ?>" class="inline-flex items-center gap-1 rounded px-2.5 py-1.5 text-xs font-medium bg-blue-100 text-blue-700 hover:bg-blue-200">
             💵 Payment
           </a>
+          <a href="<?= e(url("customers/{$c['id']}/bill")) ?>" class="inline-flex items-center gap-1 rounded px-2.5 py-1.5 text-xs font-medium bg-amber-100 text-amber-700 hover:bg-amber-200">
+            Bill
+          </a>
           <a href="<?= e(url("customers/{$c['id']}")) ?>" class="inline-flex items-center gap-1 rounded px-2.5 py-1.5 text-xs font-medium bg-slate-100 text-slate-700 hover:bg-slate-200 ml-auto">
             👁 View
           </a>
