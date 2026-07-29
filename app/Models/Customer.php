@@ -10,24 +10,49 @@ class Customer extends Model
 
     public function search(array $filters = []): array
     {
-        $query = 'SELECT * FROM customers WHERE deleted_at IS NULL';
+        $query = 'SELECT c.*, i.classification, i.last_purchase_date, i.oldest_unpaid_date, i.total_paid, 
+                         DATEDIFF(NOW(), i.oldest_unpaid_date) AS days_overdue
+                  FROM customers c
+                  LEFT JOIN customer_intelligence i ON c.id = i.customer_id
+                  WHERE c.deleted_at IS NULL';
         $params = [];
 
         if (!empty($filters['type'])) {
-            $query .= ' AND customer_type = ?';
+            $query .= ' AND c.customer_type = ?';
             $params[] = $filters['type'];
         }
         if (!empty($filters['region'])) {
-            $query .= ' AND region = ?';
+            $query .= ' AND c.region = ?';
             $params[] = $filters['region'];
         }
         if (!empty($filters['search'])) {
             $search = '%' . $filters['search'] . '%';
-            $query .= ' AND (name LIKE ? OR phone LIKE ? OR email LIKE ?)';
-            $params = array_merge($params, [$search, $search, $search]);
+            $query .= ' AND (c.name LIKE ? OR c.phone LIKE ? OR c.email LIKE ? OR c.city LIKE ?)';
+            $params = array_merge($params, [$search, $search, $search, $search]);
+        }
+        
+        // Mobile-first status filters
+        if (!empty($filters['status'])) {
+            switch ($filters['status']) {
+                case 'credit':
+                    $query .= ' AND c.outstanding_due > 0';
+                    break;
+                case 'due':
+                    $query .= ' AND c.outstanding_due > 0 AND DATEDIFF(NOW(), i.oldest_unpaid_date) > 0';
+                    break;
+                case 'risk':
+                    $query .= ' AND c.outstanding_due > 0 AND DATEDIFF(NOW(), i.oldest_unpaid_date) > 30';
+                    break;
+                case 'good':
+                    $query .= ' AND (c.outstanding_due = 0 OR DATEDIFF(NOW(), i.oldest_unpaid_date) <= 0) AND i.last_purchase_date IS NOT NULL';
+                    break;
+                case 'inactive':
+                    $query .= ' AND (i.last_purchase_date IS NULL OR DATEDIFF(NOW(), i.last_purchase_date) > 60)';
+                    break;
+            }
         }
 
-        $query .= ' ORDER BY name ASC';
+        $query .= ' ORDER BY c.name ASC';
         return $this->db()->all($query, $params);
     }
 

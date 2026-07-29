@@ -56,6 +56,24 @@ class CustomerController extends Controller
 
         $model = new Customer();
         $customerId = $model->create($data);
+        
+        $openingBalance = (float) ($request->input('opening_balance') ?? 0);
+        
+        if ($openingBalance > 0) {
+            $txnModel = new CustomerTransaction();
+            $txnModel->create([
+                'customer_id'      => $customerId,
+                'transaction_type' => 'opening_balance',
+                'amount'           => $openingBalance,
+                'running_balance'  => $openingBalance,
+                'transaction_date' => date('Y-m-d'),
+                'reference_type'   => 'system',
+                'reference_id'     => null,
+                'description'      => 'Opening Balance',
+                'created_by'       => Auth::id()
+            ]);
+            $model->updateOutstanding($customerId, $openingBalance);
+        }
 
         $intelModel = new CustomerIntelligence();
         $intelModel->create([
@@ -85,6 +103,15 @@ class CustomerController extends Controller
         $balance = $txnModel->currentBalance($id);
         $total_sales = $txnModel->totalSales($id);
         $total_payments = $txnModel->totalPayments($id);
+        
+        $saleModel = new \App\Models\Sale();
+        $invoices = $saleModel->byCustomer($id, 50);
+        
+        $paymentModel = new \App\Models\Payment();
+        $payments = $paymentModel->byCustomer($id, 50);
+        
+        $chequeModel = new \App\Models\Cheque();
+        $cheques = $chequeModel->byCustomer($id);
 
         $this->view('customers/show', [
             'title' => $customer['name'],
@@ -92,7 +119,10 @@ class CustomerController extends Controller
             'transactions' => $transactions,
             'balance' => $balance,
             'total_sales' => $total_sales,
-            'total_payments' => $total_payments
+            'total_payments' => $total_payments,
+            'invoices' => $invoices,
+            'payments' => $payments,
+            'cheques' => $cheques,
         ]);
     }
 
