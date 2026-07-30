@@ -8,8 +8,20 @@ $statusTone = [
     'shortage' => 'bg-red-100 text-red-700',
     'excess'   => 'bg-amber-100 text-amber-700',
 ];
+
+// Group items by brand for easier counting
+$brands = [];
+foreach ($items as $item) {
+    $brandName = trim($item['brand_name'] ?? '') ?: 'Other';
+    if (!isset($brands[$brandName])) {
+        $brands[$brandName] = [];
+    }
+    $brands[$brandName][] = $item;
+}
+ksort($brands);
 ?>
 
+<div x-data="{ activeBrand: 'All' }">
 <div class="mb-4">
   <a href="<?= e(url('purchases/' . $purchase['id'])) ?>" class="text-sm text-brand-600">&larr; <?= e($purchase['purchase_number']) ?></a>
   <h1 class="mt-1 text-lg font-bold text-slate-800">Verify Arrival</h1>
@@ -39,6 +51,24 @@ $statusTone = [
   <?php endif; ?>
 </div>
 
+<!-- Brand Filter -->
+<?php if (count($brands) > 1): ?>
+  <div class="mb-4 flex flex-wrap gap-2">
+    <button type="button" @click="activeBrand = 'All'" 
+            :class="activeBrand === 'All' ? 'bg-brand-600 text-white' : 'bg-white text-slate-700 ring-1 ring-slate-200'"
+            class="rounded-xl px-4 py-2 text-sm font-semibold shadow-sm transition">
+      All (<?= count($items) ?>)
+    </button>
+    <?php foreach ($brands as $brandName => $brandItems): ?>
+      <button type="button" @click="activeBrand = '<?= e($brandName) ?>'" 
+              :class="activeBrand === '<?= e($brandName) ?>' ? 'bg-brand-600 text-white' : 'bg-white text-slate-700 ring-1 ring-slate-200'"
+              class="rounded-xl px-4 py-2 text-sm font-semibold shadow-sm transition">
+        <?= e($brandName) ?> (<?= count($brandItems) ?>)
+      </button>
+    <?php endforeach; ?>
+  </div>
+<?php endif; ?>
+
 <!-- Counting -->
 <form method="post" action="<?= e(url('purchases/' . $purchase['id'] . '/arrival/counts')) ?>" class="space-y-3">
   <?= csrf_field() ?>
@@ -50,8 +80,9 @@ $statusTone = [
       $diff     = $received - $expected;
       $label    = trim(($item['brand_name'] ?? '') . ' ' . ($item['art_no'] ?? '')) ?: 'Unnamed line';
       $entries  = $counts[(int) $item['id']] ?? [];
+      $bName    = trim($item['brand_name'] ?? '') ?: 'Other';
     ?>
-    <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
+    <div x-show="activeBrand === 'All' || activeBrand === '<?= e($bName) ?>'" class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
       <div class="flex items-start gap-3">
         <?php if (!empty($item['product_thumb'])): ?>
           <img src="<?= e(StorageService::url($item['product_thumb'])) ?>" alt="" class="h-12 w-12 shrink-0 rounded-lg object-cover">
@@ -161,9 +192,10 @@ $statusTone = [
     <form method="post" action="<?= e(url('purchases/' . $purchase['id'] . '/arrival/confirm')) ?>" class="mt-3"
           onsubmit="return confirm('Confirm this shipment and add the counted stock to inventory?')">
       <?= csrf_field() ?>
-      <button class="w-full rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white shadow-sm">
+      <button class="w-full rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white shadow-sm mb-2">
         ✓ Confirm &amp; update inventory
       </button>
+      <p class="text-center text-xs font-semibold text-brand-600 mt-2">Next: Cost this shipment &rarr;</p>
     </form>
   <?php else: ?>
     <ul class="mt-3 space-y-1">
@@ -175,4 +207,6 @@ $statusTone = [
       Confirm &amp; update inventory
     </button>
   <?php endif; ?>
+</div>
+
 </div>

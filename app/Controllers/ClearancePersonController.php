@@ -41,10 +41,24 @@ class ClearancePersonController extends Controller
             $this->abort(404, 'Clearance person not found.');
         }
 
+        $id = (int) $person['id'];
+        $history = $this->people->detailedHistory($id);
+        $stats = $this->people->stats($id);
+
+        // Fetch invoice items for active shipments to show in the breakdown
+        $activeItems = [];
+        foreach ($history as $h) {
+            if (in_array($h['purchase_status'], ['assigned', 'in_transit'])) {
+                $activeItems[$h['purchase_id']] = $this->people->invoiceItems((int) $h['purchase_id']);
+            }
+        }
+
         $this->view('clearance/show', [
-            'title'   => $person['name'],
-            'person'  => $person,
-            'history' => $this->people->history((int) $person['id']),
+            'title'       => $person['name'],
+            'person'      => $person,
+            'history'     => $history,
+            'stats'       => $stats,
+            'activeItems' => $activeItems,
         ]);
     }
 

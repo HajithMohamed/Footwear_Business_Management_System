@@ -109,4 +109,62 @@ class ClearancePerson extends Model
            ORDER BY weight DESC"
         );
     }
+
+    /** Detailed assignment history including item counts. */
+    public function detailedHistory(int $id): array
+    {
+        return $this->db()->all(
+            "SELECT a.*, p.purchase_number, p.supplier_name, p.status AS purchase_status,
+                    p.total_weight_kg AS shipment_total_weight,
+                    p.costed_at,
+                    (SELECT SUM(quantity_pairs) FROM purchase_items pi WHERE pi.purchase_id = p.id) AS total_pairs
+               FROM purchase_clearance_assignments a
+               JOIN purchases p ON p.id = a.purchase_id
+              WHERE a.clearance_person_id = ?
+           ORDER BY a.assignment_date DESC, a.id DESC",
+            [$id]
+        );
+    }
+
+    /** Invoice items for a specific purchase to show in the breakdown. */
+    public function invoiceItems(int $purchaseId): array
+    {
+        return $this->db()->all(
+            "SELECT pi.*, b.name AS brand_name_resolved
+               FROM purchase_items pi
+          LEFT JOIN brands b ON b.id = pi.brand_id
+              WHERE pi.purchase_id = ?
+           ORDER BY pi.sort_order, pi.id",
+            [$purchaseId]
+        );
+    }
+
+    /** Aggregate stats for the clearance person profile. */
+    public function stats(int $id): array
+    {
+        $stats = $this->db()->first(
+            "SELECT COUNT(a.id) AS total_shipments,
+                    COALESCE(SUM(a.assigned_weight_kg), 0) AS total_weight,
+                    COALESCE(SUM(a.clearance_cost), 0) AS total_cost
+               FROM purchase_clearance_assignments a
+              WHERE a.clearance_person_id = ? AND a.status <> 'cancelled'",
+            [$id]
+        );
+
+        $pairs = $this->db()->scalar(
+            "SELECT COALESCE(SUM(pi.quantity_pairs), 0)
+               FROM purchase_items pi
+               JOIN purchases p ON p.id = pi.purchase_id
+               JOIN purchase_clearance_assignments a ON a.purchase_id = p.id
+              WHERE a.clearance_person_id = ? AND a.status <> 'cancelled'",
+            [$id]
+        );
+
+        $stats['total_pairs'] = $pairs;
+        $stats['avg_weight'] = $stats['total_shipments'] > 0 
+            ? round($stats['total_weight'] / $stats['total_shipments'], 2) 
+            : 0;
+
+        return $stats;
+    }
 }

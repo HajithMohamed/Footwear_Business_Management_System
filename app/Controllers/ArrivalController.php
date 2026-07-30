@@ -202,7 +202,7 @@ class ArrivalController extends Controller
                 ? sprintf(', %d new product(s) created', $result['products_created'])
                 : ''
         ));
-        $this->redirect('purchases/' . $purchaseId);
+        $this->redirect('purchases/' . $purchaseId . '/costing');
     }
 
     /** @return array{0:int,1:array} */

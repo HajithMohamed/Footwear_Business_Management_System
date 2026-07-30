@@ -40,10 +40,12 @@ class ParcelController extends Controller
 
         $received = (string) ($input['status'] ?? 'received') === 'received';
 
+        $parcelNumber = $this->parcels->nextNumber();
+
         $parcelId = $this->parcels->create([
             'purchase_id'   => $purchaseId,
             'assignment_id' => ((int) ($input['assignment_id'] ?? 0)) ?: null,
-            'parcel_number' => $this->parcels->nextNumber(),
+            'parcel_number' => $parcelNumber,
             'weight_kg'     => $weight,
             'carton_count'  => max(1, (int) ($input['carton_count'] ?? 1)),
             'arrival_date'  => $received ? $this->dateOrToday($input['arrival_date'] ?? '') : null,
@@ -55,10 +57,25 @@ class ParcelController extends Controller
             $this->purchases->advanceStatus($purchaseId, 'arrived');
         }
 
-        // Keep the arrival's parcel roll-up in step if verification already started.
         $arrival = (new GoodsArrival())->byPurchase($purchaseId);
         if ($arrival) {
             (new GoodsArrival())->syncParcelTotals((int) $arrival['id']);
+        }
+
+        // Handle weight photo
+        if (isset($_FILES['weight_photo']) && $_FILES['weight_photo']['error'] !== UPLOAD_ERR_NO_FILE) {
+            $storage = new \App\Services\StorageService();
+            $path = $storage->storePurchaseDocument($purchaseId, 'weight_photo');
+            if ($path) {
+                (new \App\Models\PurchaseAttachment())->create([
+                    'purchase_id'   => $purchaseId,
+                    'type'          => 'parcel_photo',
+                    'path'          => $path,
+                    'original_name' => $_FILES['weight_photo']['name'],
+                    'caption'       => "Weight proof for {$parcelNumber} ({$weight} kg)",
+                    'uploaded_by'   => \App\Core\Session::id(),
+                ]);
+            }
         }
 
         $this->log('parcel.log', 'purchase', $purchaseId, ['parcel' => $parcelId]);

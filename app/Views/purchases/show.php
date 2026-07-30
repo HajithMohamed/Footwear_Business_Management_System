@@ -141,7 +141,7 @@ $current  = array_search($purchase['status'], $statuses, true);
     </div>
   <?php endif; ?>
 
-  <form x-show="open" x-cloak method="post" action="<?= e(url('purchases/' . $purchase['id'] . '/parcels')) ?>" class="space-y-2 rounded-xl bg-slate-50 p-3">
+  <form x-show="open" x-cloak method="post" action="<?= e(url('purchases/' . $purchase['id'] . '/parcels')) ?>" enctype="multipart/form-data" class="space-y-2 rounded-xl bg-slate-50 p-3">
     <?= csrf_field() ?>
     <div class="grid grid-cols-3 gap-2">
       <input name="weight_kg" type="number" step="0.01" min="0" required placeholder="Weight kg" class="rounded-lg px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
@@ -156,6 +156,10 @@ $current  = array_search($purchase['status'], $statuses, true);
         <?php endforeach; ?>
       </select>
     <?php endif; ?>
+    <div>
+      <label class="block text-[11px] font-medium text-slate-500 mb-1">Weight scale photo / Proof (optional)</label>
+      <input type="file" name="weight_photo" accept="image/jpeg,image/png,image/webp" class="block w-full text-xs text-slate-500 file:mr-2 file:rounded-full file:border-0 file:bg-brand-50 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-brand-700 hover:file:bg-brand-100">
+    </div>
     <input name="remarks" placeholder="Remarks (optional)" class="w-full rounded-lg px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
     <button class="w-full rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white">Log parcel as received</button>
   </form>
