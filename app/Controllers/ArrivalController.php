@@ -77,12 +77,45 @@ class ArrivalController extends Controller
 
         $arrivalId = (int) $arrival['id'];
 
+        $items = $this->items->byArrival($arrivalId);
+        $groupedItems = [];
+        foreach ($items as $item) {
+            $artNo = trim((string) ($item['art_no'] ?? '')) ?: 'Unnamed';
+            if (!isset($groupedItems[$artNo])) {
+                $groupedItems[$artNo] = [
+                    'art_no'         => $artNo,
+                    'brand_name'     => $item['brand_name'] ?? 'Other',
+                    'product_thumb'  => $item['product_thumb'],
+                    'expected_pairs' => 0,
+                    'received_pairs' => 0,
+                    'items'          => [],
+                ];
+            }
+            $groupedItems[$artNo]['expected_pairs'] += (int) $item['expected_pairs'];
+            $groupedItems[$artNo]['received_pairs'] += (int) $item['received_pairs'];
+            $groupedItems[$artNo]['items'][] = $item;
+        }
+
+        foreach ($groupedItems as &$group) {
+            $diff = $group['received_pairs'] - $group['expected_pairs'];
+            $isPending = true;
+            foreach ($group['items'] as $it) {
+                if ($it['status'] !== 'pending') $isPending = false;
+            }
+            if ($isPending) {
+                $group['status'] = 'pending';
+            } else {
+                $group['status'] = $diff === 0 ? 'matched' : ($diff < 0 ? 'shortage' : 'excess');
+            }
+        }
+
         $this->view('arrivals/verify', [
-            'title'      => 'Verify Arrival — ' . $purchase['purchase_number'],
-            'purchase'   => $purchase,
-            'arrival'    => $arrival,
-            'items'      => $this->items->byArrival($arrivalId),
-            'counts'     => (new ArrivalCount())->byArrivalGrouped($arrivalId),
+            'title'        => 'Verify Arrival — ' . $purchase['purchase_number'],
+            'purchase'     => $purchase,
+            'arrival'      => $arrival,
+            'groupedItems' => array_values($groupedItems),
+            'items'        => $items, // Keep original for incremental dropdown
+            'counts'       => (new ArrivalCount())->byArrivalGrouped($arrivalId),
             'totals'     => $this->items->totals($arrivalId),
             'parcels'    => (new Parcel())->summary($purchaseId),
             'gate'       => $this->arrivals->canConfirm($arrivalId),
@@ -99,16 +132,35 @@ class ArrivalController extends Controller
         $received = $input['received_pairs'] ?? [];
         $remarks  = $input['item_remarks'] ?? [];
 
-        foreach ($this->items->byArrival($arrivalId) as $item) {
-            $id = (int) $item['id'];
-            if (!array_key_exists($id, $received) || $received[$id] === '') {
+        $items = $this->items->byArrival($arrivalId);
+        $grouped = [];
+        foreach ($items as $item) {
+            $artNo = trim((string) ($item['art_no'] ?? '')) ?: 'Unnamed';
+            $grouped[$artNo][] = $item;
+        }
+
+        foreach ($grouped as $artNo => $groupItems) {
+            if (!array_key_exists($artNo, $received) || $received[$artNo] === '') {
                 continue;
             }
-            $this->items->setReceived(
-                $id,
-                max(0, (int) $received[$id]),
-                trim((string) ($remarks[$id] ?? '')) ?: null
-            );
+            
+            $totalReceived = max(0, (int) $received[$artNo]);
+            $remark = trim((string) ($remarks[$artNo] ?? '')) ?: null;
+
+            foreach ($groupItems as $idx => $item) {
+                $id = (int) $item['id'];
+                $expected = (int) $item['expected_pairs'];
+                
+                if ($idx === count($groupItems) - 1) {
+                    // Last item takes whatever is left
+                    $this->items->setReceived($id, $totalReceived, $remark);
+                } else {
+                    // Give up to expected, if available
+                    $take = min($expected, $totalReceived);
+                    $this->items->setReceived($id, $take, $remark);
+                    $totalReceived -= $take;
+                }
+            }
         }
 
         $this->arrivals->update($arrivalId, [

@@ -64,6 +64,49 @@ class CostingController extends Controller
                 ? sprintf(' %d line(s) skipped — they still need a set weight, pairs per set and Indian price.', $result['skipped'])
                 : ''
         ));
+
+        // Process images
+        if (isset($_FILES['line_images'])) {
+            $storage = new \App\Services\StorageService();
+            $products = new \App\Models\Product();
+            $lines = $this->costing->breakdown($purchaseId, []);
+            
+            $map = [];
+            $colors = [];
+            foreach ($lines as $line) {
+                if ($line['product_id']) {
+                    $map[$line['id']] = $line['product_id'];
+                    $colors[$line['id']] = $line['colour'];
+                }
+            }
+
+            foreach ($_FILES['line_images']['tmp_name'] as $itemId => $tmpName) {
+                $error = $_FILES['line_images']['error'][$itemId] ?? UPLOAD_ERR_NO_FILE;
+                if ($tmpName && $error === UPLOAD_ERR_OK && isset($map[$itemId])) {
+                    $productId = $map[$itemId];
+                    $fileData = [
+                        'name'     => $_FILES['line_images']['name'][$itemId],
+                        'type'     => $_FILES['line_images']['type'][$itemId],
+                        'tmp_name' => $tmpName,
+                        'error'    => $error,
+                        'size'     => $_FILES['line_images']['size'][$itemId],
+                    ];
+                    
+                    if (!$storage->validateImage($fileData)) {
+                        $stored = $storage->storeProductImage($fileData, $productId);
+                        if ($stored) {
+                            $products->addImage($productId, [
+                                'path'          => $stored['path'],
+                                'thumb_path'    => $stored['thumb_path'],
+                                'original_name' => $stored['original_name'],
+                                'colour'        => $colors[$itemId] ?: null
+                            ]);
+                        }
+                    }
+                }
+            }
+        }
+
         $this->redirect('purchases/' . $purchaseId . '/costing');
     }
 

@@ -58,6 +58,31 @@ if (!$rows) {
   <?php endif; ?>
 <?php endif; ?>
 
+<!-- Datalists for Autocomplete -->
+<datalist id="brands-list">
+  <?php foreach ($brands as $brand): ?>
+    <option value="<?= e($brand['name']) ?>"></option>
+  <?php endforeach; ?>
+</datalist>
+
+<datalist id="art-no-list">
+  <?php foreach ($artNos as $artNo): ?>
+    <option value="<?= e($artNo) ?>"></option>
+  <?php endforeach; ?>
+</datalist>
+
+<datalist id="colours-list">
+  <?php foreach ($colours as $colour): ?>
+    <option value="<?= e($colour) ?>"></option>
+  <?php endforeach; ?>
+</datalist>
+
+<datalist id="size-sets-list">
+  <?php foreach ($sizeSets as $set): ?>
+    <option value="<?= e($set['label']) ?>"></option>
+  <?php endforeach; ?>
+</datalist>
+
 <form method="post" action="<?= e(url('purchases')) ?>" class="space-y-4"
       x-data='{
         rows: <?= e(json_encode($rows, JSON_HEX_APOS | JSON_HEX_QUOT)) ?>,
@@ -164,13 +189,13 @@ if (!$rows) {
           </div>
 
           <div class="grid grid-cols-2 gap-2">
-            <input x-model="row.brand_name" name="item_brand_name[]" placeholder="Brand"
+            <input x-model="row.brand_name" name="item_brand_name[]" list="brands-list" placeholder="Brand" autocomplete="off"
                    class="rounded-lg border-slate-200 px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
-            <input x-model="row.art_no" name="item_art_no[]" placeholder="Art no"
+            <input x-model="row.art_no" name="item_art_no[]" list="art-no-list" placeholder="Art no" autocomplete="off"
                    class="rounded-lg border-slate-200 px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
-            <input x-model="row.colour" name="item_colour[]" placeholder="Colour"
+            <input x-model="row.colour" name="item_colour[]" list="colours-list" placeholder="Colour" autocomplete="off"
                    class="rounded-lg border-slate-200 px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
-            <input x-model="row.size_set_label" name="item_size_set_label[]" placeholder="Size set (5x8)"
+            <input x-model="row.size_set_label" name="item_size_set_label[]" list="size-sets-list" placeholder="Size set (5x8)" autocomplete="off"
                    class="rounded-lg border-slate-200 px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
           </div>
 

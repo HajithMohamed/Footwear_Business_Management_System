@@ -13,6 +13,8 @@ use App\Models\Purchase;
 use App\Models\PurchaseAttachment;
 use App\Models\PurchaseClearanceAssignment;
 use App\Models\PurchaseItem;
+use App\Models\Product;
+use App\Models\SizeSet;
 use App\Services\InvoiceExtractionService;
 use App\Services\StorageService;
 
@@ -233,6 +235,9 @@ class PurchaseController extends Controller
         $this->view('purchases/form', $data + [
             'brands'           => (new Brand())->active(),
             'clearancePersons' => (new ClearancePerson())->active(),
+            'sizeSets'         => (new SizeSet())->active(),
+            'artNos'           => (new Product())->distinctArtNumbers(),
+            'colours'          => (new Product())->distinctColours(),
         ]);
     }
 

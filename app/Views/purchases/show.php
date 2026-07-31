@@ -125,17 +125,35 @@ $current  = array_search($purchase['status'], $statuses, true);
   <?php if ($purchase['parcels']): ?>
     <div class="space-y-2 mb-2">
       <?php foreach ($purchase['parcels'] as $p): ?>
+        <?php
+          $photo = null;
+          foreach ($purchase['attachments'] as $doc) {
+              if ($doc['type'] === 'parcel_photo' && str_contains($doc['caption'] ?? '', $p['parcel_number'])) {
+                  $photo = $doc;
+                  break;
+              }
+          }
+        ?>
         <div class="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
           <div>
             <p class="text-xs font-medium text-slate-700"><?= e($p['parcel_number']) ?></p>
             <p class="text-[11px] text-slate-500">
-              <?= number_format((float) $p['weight_kg'], 2) ?> kg · <?= (int) $p['carton_count'] ?> carton(s)
+              Given: <?= number_format((float) $p['weight_kg'], 2) ?> kg
+              <?php if ($p['arrived_weight_kg']): ?>
+                · Arrived: <span class="font-medium <?= abs($p['weight_kg'] - $p['arrived_weight_kg']) > 0.5 ? 'text-amber-600' : 'text-green-600' ?>"><?= number_format((float) $p['arrived_weight_kg'], 2) ?> kg</span>
+              <?php endif; ?>
+              · <?= (int) $p['carton_count'] ?> carton(s)
               <?= $p['clearance_person_name'] ? ' · ' . e($p['clearance_person_name']) : '' ?>
             </p>
           </div>
-          <span class="rounded-md px-2 py-0.5 text-[10px] font-semibold <?= $p['status'] === 'received' ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-600' ?>">
-            <?= e(ucfirst($p['status'])) ?>
-          </span>
+          <div class="flex items-center gap-2">
+            <?php if ($photo): ?>
+              <a href="<?= e(\App\Services\StorageService::url($photo['path'])) ?>" target="_blank" class="text-[10px] font-semibold text-brand-600 underline">View Photo</a>
+            <?php endif; ?>
+            <span class="rounded-md px-2 py-0.5 text-[10px] font-semibold <?= $p['status'] === 'received' ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-600' ?>">
+              <?= e(ucfirst($p['status'])) ?>
+            </span>
+          </div>
         </div>
       <?php endforeach; ?>
     </div>
@@ -143,8 +161,9 @@ $current  = array_search($purchase['status'], $statuses, true);
 
   <form x-show="open" x-cloak method="post" action="<?= e(url('purchases/' . $purchase['id'] . '/parcels')) ?>" enctype="multipart/form-data" class="space-y-2 rounded-xl bg-slate-50 p-3">
     <?= csrf_field() ?>
-    <div class="grid grid-cols-3 gap-2">
-      <input name="weight_kg" type="number" step="0.01" min="0" required placeholder="Weight kg" class="rounded-lg px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
+    <div class="grid grid-cols-2 gap-2">
+      <input name="weight_kg" type="number" step="0.01" min="0" required placeholder="Given weight kg" class="rounded-lg px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
+      <input name="arrived_weight_kg" type="number" step="0.01" min="0" placeholder="Arrived weight kg" class="rounded-lg px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
       <input name="carton_count" type="number" min="1" value="1" placeholder="Cartons" class="rounded-lg px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
       <input name="arrival_date" type="date" value="<?= e(date('Y-m-d')) ?>" class="rounded-lg px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
     </div>

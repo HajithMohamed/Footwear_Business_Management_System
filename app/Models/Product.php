@@ -239,4 +239,16 @@ class Product extends Model
               LIMIT {$limit}"
         );
     }
+
+    /** For autocomplete dropdowns */
+    public function distinctArtNumbers(): array
+    {
+        return $this->db()->column('SELECT DISTINCT art_no FROM products WHERE art_no IS NOT NULL AND art_no != "" ORDER BY art_no');
+    }
+
+    public function distinctColours(): array
+    {
+        // Get colours from purchase items (which captures what was typed on invoices)
+        return $this->db()->column('SELECT DISTINCT colour FROM purchase_items WHERE colour IS NOT NULL AND colour != "" ORDER BY colour');
+    }
 }

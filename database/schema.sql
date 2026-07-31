@@ -463,6 +463,7 @@ CREATE TABLE IF NOT EXISTS parcels (
     parcel_number   VARCHAR(40) NOT NULL,          -- PARCEL-2026-000001
     weight_kg       DECIMAL(10,2) NOT NULL DEFAULT 0,
     carton_count    SMALLINT UNSIGNED NOT NULL DEFAULT 1, -- cartons / bags
+    arrived_weight_kg DECIMAL(10,2) NULL,          -- shop's scale reading
     arrival_date    DATE NULL,
     status          ENUM('expected','received','damaged','missing') NOT NULL DEFAULT 'expected',
     remarks         TEXT NULL,

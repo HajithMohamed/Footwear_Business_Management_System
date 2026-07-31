@@ -73,19 +73,18 @@ ksort($brands);
 <form method="post" action="<?= e(url('purchases/' . $purchase['id'] . '/arrival/counts')) ?>" class="space-y-3">
   <?= csrf_field() ?>
 
-  <?php foreach ($items as $item): ?>
+  <?php foreach ($groupedItems as $group): ?>
     <?php
-      $expected = (int) $item['expected_pairs'];
-      $received = (int) $item['received_pairs'];
+      $expected = (int) $group['expected_pairs'];
+      $received = (int) $group['received_pairs'];
       $diff     = $received - $expected;
-      $label    = trim(($item['brand_name'] ?? '') . ' ' . ($item['art_no'] ?? '')) ?: 'Unnamed line';
-      $entries  = $counts[(int) $item['id']] ?? [];
-      $bName    = trim($item['brand_name'] ?? '') ?: 'Other';
+      $label    = trim(($group['brand_name'] ?? '') . ' ' . ($group['art_no'] ?? '')) ?: 'Unnamed line';
+      $bName    = trim($group['brand_name'] ?? '') ?: 'Other';
     ?>
     <div x-show="activeBrand === 'All' || activeBrand === '<?= e($bName) ?>'" class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
       <div class="flex items-start gap-3">
-        <?php if (!empty($item['product_thumb'])): ?>
-          <img src="<?= e(StorageService::url($item['product_thumb'])) ?>" alt="" class="h-12 w-12 shrink-0 rounded-lg object-cover">
+        <?php if (!empty($group['product_thumb'])): ?>
+          <img src="<?= e(StorageService::url($group['product_thumb'])) ?>" alt="" class="h-12 w-12 shrink-0 rounded-lg object-cover">
         <?php else: ?>
           <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-lg">👟</span>
         <?php endif; ?>
@@ -93,12 +92,12 @@ ksort($brands);
         <div class="min-w-0 flex-1">
           <p class="truncate text-sm font-semibold text-slate-800"><?= e($label) ?></p>
           <p class="text-[11px] text-slate-500">
-            <?= e($item['colour'] ?: '—') ?> · <?= e($item['size_set_label'] ?: '—') ?>
+            <?= count($group['items']) ?> variant(s)
           </p>
         </div>
 
-        <span class="shrink-0 rounded-lg px-2 py-0.5 text-[10px] font-semibold <?= $statusTone[$item['status']] ?? $statusTone['pending'] ?>">
-          <?= e(ucfirst($item['status'])) ?>
+        <span class="shrink-0 rounded-lg px-2 py-0.5 text-[10px] font-semibold <?= $statusTone[$group['status']] ?? $statusTone['pending'] ?>">
+          <?= e(ucfirst($group['status'])) ?>
         </span>
       </div>
 
@@ -119,26 +118,12 @@ ksort($brands);
         </div>
       </div>
 
-      <?php if ($isIncremental): ?>
-        <?php if ($entries): ?>
-          <div class="mt-3 space-y-1 rounded-lg bg-slate-50 p-2">
-            <?php foreach ($entries as $entry): ?>
-              <div class="flex justify-between text-[11px] text-slate-600">
-                <span><?= e($entry['parcel_number'] ?: 'Count') ?><?= $entry['note'] ? ' · ' . e($entry['note']) : '' ?></span>
-                <span class="font-semibold">+<?= (int) $entry['counted_pairs'] ?></span>
-              </div>
-            <?php endforeach; ?>
-            <div class="flex justify-between border-t border-slate-200 pt-1 text-[11px] font-bold text-slate-800">
-              <span>Running total</span><span><?= $received ?></span>
-            </div>
-          </div>
-        <?php endif; ?>
-      <?php else: ?>
+      <?php if (!$isIncremental): ?>
         <div class="mt-3 grid grid-cols-2 gap-2">
-          <input type="number" min="0" name="received_pairs[<?= (int) $item['id'] ?>]"
-                 value="<?= $item['status'] === 'pending' ? '' : $received ?>" placeholder="Pairs counted"
+          <input type="number" min="0" name="received_pairs[<?= e($group['art_no']) ?>]"
+                 value="<?= $group['status'] === 'pending' ? '' : $received ?>" placeholder="Pairs counted"
                  class="rounded-lg px-2.5 py-2 text-sm ring-1 ring-slate-200">
-          <input name="item_remarks[<?= (int) $item['id'] ?>]" value="<?= e($item['remarks'] ?? '') ?>"
+          <input name="item_remarks[<?= e($group['art_no']) ?>]" value=""
                  placeholder="Remarks" class="rounded-lg px-2.5 py-2 text-sm ring-1 ring-slate-200">
         </div>
       <?php endif; ?>

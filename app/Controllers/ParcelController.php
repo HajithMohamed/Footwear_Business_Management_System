@@ -43,14 +43,15 @@ class ParcelController extends Controller
         $parcelNumber = $this->parcels->nextNumber();
 
         $parcelId = $this->parcels->create([
-            'purchase_id'   => $purchaseId,
-            'assignment_id' => ((int) ($input['assignment_id'] ?? 0)) ?: null,
-            'parcel_number' => $parcelNumber,
-            'weight_kg'     => $weight,
-            'carton_count'  => max(1, (int) ($input['carton_count'] ?? 1)),
-            'arrival_date'  => $received ? $this->dateOrToday($input['arrival_date'] ?? '') : null,
-            'status'        => $received ? 'received' : 'expected',
-            'remarks'       => trim((string) ($input['remarks'] ?? '')) ?: null,
+            'purchase_id'       => $purchaseId,
+            'assignment_id'     => ((int) ($input['assignment_id'] ?? 0)) ?: null,
+            'parcel_number'     => $parcelNumber,
+            'weight_kg'         => $weight,
+            'arrived_weight_kg' => !empty($input['arrived_weight_kg']) ? (float) $input['arrived_weight_kg'] : null,
+            'carton_count'      => max(1, (int) ($input['carton_count'] ?? 1)),
+            'arrival_date'      => $received ? $this->dateOrToday($input['arrival_date'] ?? '') : null,
+            'status'            => $received ? 'received' : 'expected',
+            'remarks'           => trim((string) ($input['remarks'] ?? '')) ?: null,
         ]);
 
         if ($received) {

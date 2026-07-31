@@ -11,7 +11,7 @@
   </div>
 <?php endif; ?>
 
-<form method="post" action="<?= e(url('purchases/' . $purchase['id'] . '/costing')) ?>" class="space-y-4">
+<form method="post" action="<?= e(url('purchases/' . $purchase['id'] . '/costing')) ?>" enctype="multipart/form-data" class="mx-auto max-w-4xl pt-8 pb-32">
   <?= csrf_field() ?>
 
   <!-- Rate inputs -->
@@ -95,8 +95,8 @@
                    class="w-full rounded-lg px-2.5 py-1.5 text-sm ring-1 <?= $line['set_weight_grams'] > 0 ? 'ring-slate-200' : 'ring-amber-300' ?>">
           </div>
           <div>
-            <label class="block text-[10px] font-medium text-slate-400 mb-1">Indian price</label>
-            <input name="indian_price[<?= (int) $line['id'] ?>]" type="number" step="0.01" min="0"
+            <label class="block text-[10px] font-medium text-slate-400 mb-1">Indian Price</label>
+            <input name="indian_price[<?= (int) $line['id'] ?>]" type="number" step="0.01" min="0" required
                    value="<?= $line['indian_price'] ?: '' ?>"
                    class="w-full rounded-lg px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
           </div>
@@ -106,6 +106,10 @@
                    value="<?= $line['discount_percent'] ?: '' ?>"
                    class="w-full rounded-lg px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
           </div>
+        </div>
+        <div class="mt-2">
+          <label class="block text-[10px] font-medium text-slate-400 mb-1">Upload Product Image (optional)</label>
+          <input type="file" name="line_images[<?= (int) $line['id'] ?>]" accept="image/jpeg,image/png,image/webp" class="block w-full text-xs text-slate-500 file:mr-2 file:rounded-full file:border-0 file:bg-brand-50 file:px-3 file:py-1 file:text-[10px] file:font-semibold file:text-brand-700 hover:file:bg-brand-100">
         </div>
 
         <?php if ($line['ready']): ?>
