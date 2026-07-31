@@ -7,6 +7,7 @@ use App\Core\Model;
 class Customer extends Model
 {
     protected string $table = 'customers';
+    protected bool $softDelete = true;
 
     public function search(array $filters = []): array
     {
@@ -14,7 +15,7 @@ class Customer extends Model
                          DATEDIFF(NOW(), i.oldest_unpaid_date) AS days_overdue
                   FROM customers c
                   LEFT JOIN customer_intelligence i ON c.id = i.customer_id
-                  WHERE c.deleted_at IS NULL';
+                  WHERE 1=1';
         $params = [];
 
         if (!empty($filters['type'])) {
@@ -29,6 +30,12 @@ class Customer extends Model
             $search = '%' . $filters['search'] . '%';
             $query .= ' AND (c.name LIKE ? OR c.phone LIKE ? OR c.email LIKE ? OR c.city LIKE ?)';
             $params = array_merge($params, [$search, $search, $search, $search]);
+        }
+
+        if (($filters['status'] ?? '') === 'deleted') {
+            $query .= ' AND c.deleted_at IS NOT NULL';
+        } else {
+            $query .= ' AND c.deleted_at IS NULL';
         }
         
         // Mobile-first status filters
@@ -61,6 +68,11 @@ class Customer extends Model
         return $this->db()->first('SELECT * FROM customers WHERE id = ? AND deleted_at IS NULL', [$id]);
     }
 
+    public function getByIdWithDeleted(int $id): ?array
+    {
+        return $this->db()->first('SELECT * FROM customers WHERE id = ?', [$id]);
+    }
+
     public function create(array $data): int
     {
         return $this->db()->insert('customers', $data);
@@ -78,7 +90,7 @@ class Customer extends Model
             'SELECT c.*, i.classification, i.lifetime_value, i.total_purchases, i.last_purchase_date, i.overdue_amount
              FROM customers c
              LEFT JOIN customer_intelligence i ON c.id = i.customer_id
-             WHERE c.id = ? AND c.deleted_at IS NULL',
+             WHERE c.id = ?',
             [$id]
         );
 
@@ -112,5 +124,10 @@ class Customer extends Model
              LIMIT ?",
             [$days, $limit]
         );
+    }
+
+    public function restore(int $id): void
+    {
+        $this->db()->query('UPDATE customers SET deleted_at = NULL WHERE id = ?', [$id]);
     }
 }

@@ -163,4 +163,36 @@ class CustomerController extends Controller
         Session::flashSuccess('Customer updated successfully.');
         $this->redirect("/customers/$id");
     }
+
+    public function destroy(Request $request, array $params): void
+    {
+        $id = (int) $params['id'];
+        $model = new Customer();
+        
+        if (!$model->getById($id)) {
+            $this->abort(404, 'Customer not found');
+        }
+
+        $model->delete($id);
+        
+        $this->log('customer.delete', 'customer', $id);
+        Session::flash('success', 'Customer deleted.');
+        $this->redirect('/customers');
+    }
+
+    public function restore(Request $request, array $params): void
+    {
+        $id = (int) $params['id'];
+        $model = new Customer();
+        
+        if (!$model->getByIdWithDeleted($id)) {
+            $this->abort(404, 'Customer not found');
+        }
+
+        $model->restore($id);
+        
+        $this->log('customer.restore', 'customer', $id);
+        Session::flash('success', 'Customer restored.');
+        $this->redirect("/customers/$id");
+    }
 }

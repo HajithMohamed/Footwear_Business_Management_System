@@ -39,6 +39,8 @@ return function (Router $r): void {
     $r->get('/customers/{id}/edit',   'CustomerController@edit',   ['auth']);
     $r->get('/customers/{id}',        'CustomerController@show',   ['auth']);  // must stay AFTER /create
     $r->post('/customers/{id}',       'CustomerController@update', ['auth']);
+    $r->post('/customers/{id}/delete','CustomerController@destroy',['auth', 'admin']);
+    $r->post('/customers/{id}/restore','CustomerController@restore',['auth', 'admin']);
 
     // --- Manual customer bills (credit tracking only) -----------------------
     $r->get('/customers/{customerId}/bill',       'CustomerBillController@create', ['auth']);

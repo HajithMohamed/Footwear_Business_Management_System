@@ -32,6 +32,7 @@
       'good' => 'Good',
       'risk' => 'Risk',
       'inactive' => 'Inactive',
+      'deleted' => 'Deleted',
     ];
     foreach ($pills as $val => $label):
       $active = $currentStatus === $val;
@@ -68,7 +69,10 @@
         $daysOverdue = (int) ($c['days_overdue'] ?? 0);
         $outstanding = (float) $c['outstanding_due'];
         
-        if ($outstanding > 0) {
+        if (!empty($c['deleted_at'])) {
+            $statusLabel = '🗑️ Deleted';
+            $statusClass = 'text-slate-400';
+        } elseif ($outstanding > 0) {
             if ($daysOverdue > 30) {
                 $statusLabel = '🔴 High Risk';
                 $statusClass = 'text-red-600';

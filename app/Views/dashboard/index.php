@@ -129,6 +129,40 @@
   </div>
 <?php endif; ?>
 
+<!-- Continue Working -->
+<?php if (!empty($inProgressPurchases)): ?>
+  <div class="mb-6 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 border border-brand-100">
+    <div class="border-b border-slate-100 bg-brand-50 px-4 py-3 flex justify-between items-center">
+      <h2 class="text-sm font-bold text-brand-800 flex items-center gap-2">
+        <span class="text-lg">📋</span> Continue Working
+      </h2>
+      <a href="<?= e(url('purchases?status=in_progress')) ?>" class="text-[10px] font-bold text-brand-600 hover:text-brand-800 uppercase tracking-wide">View All</a>
+    </div>
+    <ul class="divide-y divide-slate-100">
+      <?php foreach ($inProgressPurchases as $p): ?>
+        <li>
+          <a href="<?= e(url("purchases/{$p['id']}")) ?>" class="flex items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50 transition">
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-bold text-slate-800">
+                <?= e($p['purchase_number']) ?>
+                <span class="ml-2 rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600">
+                  <?= e(\App\Models\Purchase::statusLabel($p['status'])) ?>
+                </span>
+              </p>
+              <p class="text-xs font-medium text-slate-500 truncate"><?= e($p['supplier_name']) ?></p>
+            </div>
+            <div class="shrink-0">
+              <span class="text-brand-600">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+              </span>
+            </div>
+          </a>
+        </li>
+      <?php endforeach; ?>
+    </ul>
+  </div>
+<?php endif; ?>
+
 <!-- Imports & Shipments Summary -->
 <h2 class="mt-8 mb-3 text-sm font-bold text-slate-500 uppercase tracking-wider">Shipments Summary</h2>
 <div class="grid grid-cols-3 gap-3 mb-4">

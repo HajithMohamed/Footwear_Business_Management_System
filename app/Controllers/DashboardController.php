@@ -40,6 +40,7 @@ class DashboardController extends Controller
             'inTransit'          => $purchases->inTransit(5),
             'recentlyArrived'    => $purchases->recentlyArrived(5),
             'recentPurchases'    => $purchases->recent(5),
+            'inProgressPurchases'=> $purchases->search(['status' => 'in_progress'], 5),
             'pendingParcels'     => (new Parcel())->pendingVerification(5),
             'pendingQuantity'    => (new GoodsArrival())->pendingQuantityVerification(5),
             'byClearancePerson'  => $people->openShipments(),

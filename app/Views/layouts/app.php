@@ -27,7 +27,7 @@ $navActive = function (string $prefix) use ($currentPath): string {
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link rel="stylesheet" href="<?= e(asset('css/app.css')) ?>">
 </head>
-<body class="h-full bg-slate-50 text-slate-800 antialiased pb-20">
+<body class="h-full bg-slate-50 text-slate-800 antialiased pb-28">
 
 <!-- Top bar -->
 <header class="fixed top-0 inset-x-0 z-30 bg-white text-slate-800 shadow-sm border-b border-slate-200">
@@ -147,7 +147,9 @@ $navActive = function (string $prefix) use ($currentPath): string {
               <div class="space-y-1">
                 <a href="<?= e(url('sales')) ?>" class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-50 text-slate-700 font-medium"><span class="text-xl w-6">📃</span> All Sales</a>
                 <a href="<?= e(url('purchases')) ?>" class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-50 text-slate-700 font-medium"><span class="text-xl w-6">🚢</span> Purchases</a>
+                <a href="<?= e(url('purchases?status=in_progress')) ?>" class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-50 text-slate-700 font-medium"><span class="text-xl w-6">📋</span> In-Progress Purchases</a>
                 <a href="<?= e(url('arrivals')) ?>" class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-50 text-slate-700 font-medium"><span class="text-xl w-6">✅</span> Arrivals & Verify</a>
+                <a href="<?= e(url('clearance-persons')) ?>" class="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-50 text-slate-700 font-medium"><span class="text-xl w-6">🚛</span> Clearance Persons</a>
               </div>
             </div>
             <div>

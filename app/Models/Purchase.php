@@ -131,8 +131,12 @@ class Purchase extends Model
         $params     = [];
 
         if (!empty($filters['status'])) {
-            $conditions[] = 'p.status = ?';
-            $params[]     = $filters['status'];
+            if ($filters['status'] === 'in_progress') {
+                $conditions[] = "p.status <> 'completed'";
+            } else {
+                $conditions[] = 'p.status = ?';
+                $params[]     = $filters['status'];
+            }
         }
         if (!empty($filters['search'])) {
             $conditions[] = '(p.purchase_number LIKE ? OR p.supplier_name LIKE ? OR p.supplier_invoice_no LIKE ?)';

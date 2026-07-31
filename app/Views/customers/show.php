@@ -327,3 +327,29 @@
   </div>
 
 </div>
+
+  <?php if (empty($customer['deleted_at'])): ?>
+    <div class="mt-8 rounded-2xl bg-red-50 p-4 border border-red-100">
+      <h3 class="text-sm font-bold text-red-800 mb-2 flex items-center gap-2">⚠️ Danger Zone</h3>
+      <p class="text-xs text-red-600 mb-4">Deleting this customer will hide them from the directory. You can restore them later.</p>
+      <form method="post" action="<?= e(url("customers/{$customer['id']}/delete")) ?>" onsubmit="return confirm('Are you sure you want to delete this customer?');">
+        <?= csrf_field() ?>
+        <button class="w-full rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-red-700 active:scale-95 transition">
+          Delete Customer
+        </button>
+      </form>
+    </div>
+  <?php else: ?>
+    <div class="mt-8 rounded-2xl bg-slate-100 p-4 border border-slate-200">
+      <h3 class="text-sm font-bold text-slate-800 mb-2 flex items-center gap-2">🗑️ Deleted Customer</h3>
+      <p class="text-xs text-slate-600 mb-4">This customer is currently deleted. Restore them to show them in the directory again.</p>
+      <form method="post" action="<?= e(url("customers/{$customer['id']}/restore")) ?>">
+        <?= csrf_field() ?>
+        <button class="w-full rounded-xl bg-slate-800 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-slate-900 active:scale-95 transition">
+          Restore Customer
+        </button>
+      </form>
+    </div>
+  <?php endif; ?>
+
+</div>

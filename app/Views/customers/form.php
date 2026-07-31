@@ -108,6 +108,14 @@
     </div>
   </div>
 
+  <?php if ($customer && !empty($customer['updated_at'])): ?>
+    <div class="mb-4 text-center">
+      <p class="text-xs text-slate-400">
+        Last updated on <?= e(date('d M Y, h:i A', strtotime($customer['updated_at']))) ?>
+      </p>
+    </div>
+  <?php endif; ?>
+
   <!-- Sticky Action Bar -->
   <div class="fixed bottom-0 left-0 right-0 sm:left-64 z-40 bg-white border-t border-slate-200 p-4 shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
     <div class="max-w-3xl mx-auto flex gap-3">
