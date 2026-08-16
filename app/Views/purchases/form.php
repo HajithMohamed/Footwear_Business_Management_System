@@ -83,7 +83,7 @@ if (!$rows) {
   <?php endforeach; ?>
 </datalist>
 
-<form method="post" action="<?= e(url('purchases')) ?>" class="space-y-4"
+<form method="post" action="<?= e(url($formAction ?? 'purchases')) ?>" class="space-y-4"
       x-data='{
         rows: <?= e(json_encode($rows, JSON_HEX_APOS | JSON_HEX_QUOT)) ?>,
         blank() { return { brand_name:"", art_no:"", colour:"", size_set_label:"", pairs_per_set:"", quantity_sets:"", quantity_pairs:"", unit_price:"", line_total:"", matched:null }; },

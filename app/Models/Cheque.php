@@ -57,8 +57,8 @@ class Cheque extends Model
             'status_updated_by' => $updatedBy,
         ];
 
-        // Banking it is what turns a promise into money, so stamp the moment.
-        if ($status === 'cleared') {
+        // Depositing records custody at the bank; only clearing counts as cash.
+        if ($status === 'deposited') {
             $data['deposited_at'] = date('Y-m-d H:i:s');
         }
 
@@ -107,7 +107,7 @@ class Cheque extends Model
                FROM cheques c
                JOIN payments p     ON p.id = c.payment_id
                JOIN customers cust ON cust.id = p.customer_id
-              WHERE c.status = 'pending'
+              WHERE c.status IN ('pending', 'deposited')
                 AND COALESCE(c.deposit_date, c.cheque_date) <= DATE_ADD(CURDATE(), INTERVAL ? DAY)
            ORDER BY due_on ASC
               LIMIT {$limit}",
@@ -122,6 +122,8 @@ class Cheque extends Model
             "SELECT
                 COALESCE(SUM(status = 'pending'), 0)                              AS pending_count,
                 COALESCE(SUM(CASE WHEN status = 'pending' THEN amount END), 0)     AS pending_value,
+                COALESCE(SUM(status = 'deposited'), 0)                            AS deposited_count,
+                COALESCE(SUM(CASE WHEN status = 'deposited' THEN amount END), 0)   AS deposited_value,
                 COALESCE(SUM(status = 'cleared'), 0)                              AS cleared_count,
                 COALESCE(SUM(CASE WHEN status = 'cleared' THEN amount END), 0)     AS cleared_value,
                 COALESCE(SUM(status = 'bounced'), 0)                              AS bounced_count,

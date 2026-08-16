@@ -2,6 +2,7 @@
 use App\Services\StorageService;
 
 $statusMeta = [
+    'deposited' => ['Bank', 'Deposited', 'bg-blue-100 text-blue-700'],
     'pending'   => ['⏳', 'Pending',   'bg-amber-100 text-amber-700'],
     'cleared'   => ['✅', 'Cleared',   'bg-green-100 text-green-700'],
     'bounced'   => ['❌', 'Bounced',   'bg-red-100 text-red-700'],
@@ -25,8 +26,8 @@ $countFor = function (string $status) use ($stats): int {
 <div class="grid grid-cols-2 gap-3">
   <div class="rounded-2xl bg-amber-50 p-4 ring-1 ring-amber-100">
     <p class="text-[11px] font-medium text-amber-600">Waiting to clear</p>
-    <p class="mt-1 text-xl font-bold text-amber-800"><?= money($summary['pending_value'] ?? 0) ?></p>
-    <p class="text-[11px] text-amber-600"><?= (int) ($summary['pending_count'] ?? 0) ?> cheque(s)</p>
+    <p class="mt-1 text-xl font-bold text-amber-800"><?= money(($summary['pending_value'] ?? 0) + ($summary['deposited_value'] ?? 0)) ?></p>
+    <p class="text-[11px] text-amber-600"><?= (int) (($summary['pending_count'] ?? 0) + ($summary['deposited_count'] ?? 0)) ?> cheque(s)</p>
   </div>
   <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
     <p class="text-[11px] font-medium text-slate-400">Bounced</p>
@@ -87,7 +88,7 @@ $countFor = function (string $status) use ($stats): int {
     <?php foreach ($cheques as $c): ?>
       <?php
         $due       = $c['deposit_date'] ?: $c['cheque_date'];
-        $late      = $c['status'] === 'pending' && $due < date('Y-m-d');
+        $late      = in_array($c['status'], ['pending', 'deposited'], true) && $due < date('Y-m-d');
         $chipClass = $statusMeta[$c['status']][2] ?? 'bg-slate-100 text-slate-700';
       ?>
       <a href="<?= e(url("cheques/{$c['id']}")) ?>"

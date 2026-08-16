@@ -101,6 +101,11 @@ class ClearanceAssignmentController extends Controller
             $this->abort(404, 'Purchase not found.');
         }
 
+        $assigned = $this->assignments->byPurchase($purchaseId);
+        if (!$assigned) {
+            Session::flash('error', 'Assign at least one clearance person before marking this shipment in transit.');
+            $this->redirect('purchases/' . $purchaseId);
+        }
         $this->assignments->updateStatusForPurchase($purchaseId, 'in_transit');
         $this->purchases->advanceStatus($purchaseId, 'in_transit');
 

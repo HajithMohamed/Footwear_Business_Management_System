@@ -63,18 +63,27 @@ class ParcelController extends Controller
             (new GoodsArrival())->syncParcelTotals((int) $arrival['id']);
         }
 
-        // Handle weight photo
+        // Handle weight photo. A parcel photo is a normal purchase document;
+        // validate and store the uploaded file, never request values from it.
         if (isset($_FILES['weight_photo']) && $_FILES['weight_photo']['error'] !== UPLOAD_ERR_NO_FILE) {
             $storage = new \App\Services\StorageService();
-            $path = $storage->storePurchaseDocument($purchaseId, 'weight_photo');
-            if ($path) {
+            $file = $_FILES['weight_photo'];
+            if ($error = $storage->validateDocument($file)) {
+                Session::flash('error', $error);
+                $this->redirect('purchases/' . $purchaseId);
+            }
+            $stored = $storage->storePurchaseDocument($file, $purchaseId);
+            if ($stored) {
                 (new \App\Models\PurchaseAttachment())->create([
                     'purchase_id'   => $purchaseId,
                     'type'          => 'parcel_photo',
-                    'path'          => $path,
-                    'original_name' => $_FILES['weight_photo']['name'],
+                    'path'          => $stored['path'],
+                    'thumb_path'    => $stored['thumb_path'],
+                    'original_name' => $stored['original_name'],
+                    'mime_type'     => $stored['mime_type'],
+                    'size_bytes'    => $stored['size_bytes'],
                     'caption'       => "Weight proof for {$parcelNumber} ({$weight} kg)",
-                    'uploaded_by'   => \App\Core\Session::id(),
+                    'uploaded_by'   => \App\Core\Auth::id(),
                 ]);
             }
         }
@@ -110,6 +119,11 @@ class ParcelController extends Controller
         $parcel = $this->parcels->find($parcelId);
         if (!$parcel || (int) $parcel['purchase_id'] !== $purchaseId) {
             $this->abort(404, 'Parcel not found.');
+        }
+        $arrival = (new GoodsArrival())->byPurchase($purchaseId);
+        if ($arrival && (int) $arrival['inventory_updated'] === 1) {
+            Session::flash('error', 'This arrival is confirmed; parcel history is now locked.');
+            $this->redirect('purchases/' . $purchaseId);
         }
 
         $input  = $request->all();

@@ -10,6 +10,7 @@ use App\Core\Controller;
 use App\Core\Request;
 use App\Core\Session;
 use App\Core\Auth;
+use App\Core\Database;
 use App\Services\CustomerIntelligenceService;
 
 class PaymentController extends Controller
@@ -50,6 +51,20 @@ class PaymentController extends Controller
         if (!in_array($method, ['cash', 'bank_transfer', 'cheque', 'card'], true)) {
             throw new \Exception('Payment method is not valid');
         }
+        if ($amount > (float) $customer['outstanding_due']) {
+            throw new \Exception('Payment cannot be more than the current outstanding balance.');
+        }
+
+        $chequeDate = null;
+        $depositDate = null;
+        if ($method === 'cheque') {
+            $chequeDate = $this->date($request->input('cheque_date'))
+                ?? throw new \Exception('Cheque date is required');
+            $depositDate = $this->date($request->input('deposit_date'));
+            if ($request->input('deposit_date') !== null && $request->input('deposit_date') !== '' && !$depositDate) {
+                throw new \Exception('Deposit date is not valid.');
+            }
+        }
 
         $paymentData = [
             'customer_id' => $customerId,
@@ -61,38 +76,47 @@ class PaymentController extends Controller
             'recorded_by' => Auth::id()
         ];
 
-        $paymentModel = new Payment();
-        $paymentId = $paymentModel->create($paymentData);
+        Database::instance()->transaction(function () use (
+            $customerId, $amount, $method, $paymentDate, $paymentData, $chequeDate,
+            $depositDate, $request, $customerModel
+        ): void {
+            // Lock the customer row so simultaneous mobile submissions cannot
+            // produce two ledger entries from the same balance.
+            $locked = Database::instance()->first(
+                'SELECT outstanding_due FROM customers WHERE id = ? FOR UPDATE',
+                [$customerId]
+            );
+            if (!$locked || $amount > (float) $locked['outstanding_due']) {
+                throw new \RuntimeException('The outstanding balance changed. Please review and try again.');
+            }
 
-        if ($method === 'cheque') {
-            $chequeModel = new Cheque();
-            $chequeModel->create([
-                'payment_id' => $paymentId,
-                'cheque_number' => $request->input('cheque_number') ?: throw new \Exception('Cheque number is required'),
-                'bank_name' => $request->input('bank_name'),
-                'cheque_date' => $request->input('cheque_date') ?: throw new \Exception('Cheque date is required'),
-                'amount' => $amount,
-                'status' => 'pending'
+            $paymentId = (new Payment())->create($paymentData);
+            if ($method === 'cheque') {
+                (new Cheque())->create([
+                    'payment_id'     => $paymentId,
+                    'cheque_number'  => $request->input('cheque_number') ?: throw new \Exception('Cheque number is required'),
+                    'bank_name'      => $request->input('bank_name'),
+                    'cheque_date'    => $chequeDate,
+                    'deposit_date'   => $depositDate,
+                    'amount'         => $amount,
+                    'status'         => 'pending',
+                ]);
+            }
+
+            $newBalance = (float) $locked['outstanding_due'] - $amount;
+            (new CustomerTransaction())->create([
+                'customer_id'      => $customerId,
+                'transaction_type' => 'payment',
+                'amount'           => $amount,
+                'running_balance'  => $newBalance,
+                'transaction_date' => $paymentDate,
+                'reference_type'   => 'payment',
+                'reference_id'     => $paymentId,
+                'description'      => "Payment via {$method}",
+                'created_by'       => Auth::id(),
             ]);
-        }
-
-        $txnModel = new CustomerTransaction();
-        $currentBalance = $txnModel->currentBalance($customerId);
-        $newBalance = max(0, $currentBalance - $amount);
-
-        $txnModel->create([
-            'customer_id' => $customerId,
-            'transaction_type' => 'payment',
-            'amount' => $amount,
-            'running_balance' => $newBalance,
-            'transaction_date' => $paymentDate,
-            'reference_type' => 'payment',
-            'reference_id' => $paymentId,
-            'description' => "Payment via {$method}",
-            'created_by' => Auth::id()
-        ]);
-
-        $customerModel->updateOutstanding($customerId, $newBalance);
+            $customerModel->updateOutstanding($customerId, $newBalance);
+        });
         $this->refreshIntelligence($customerId);
 
         Session::flash('success', 'Payment recorded successfully.');

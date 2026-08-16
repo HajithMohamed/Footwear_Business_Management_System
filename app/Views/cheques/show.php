@@ -2,8 +2,9 @@
 use App\Services\StorageService;
 
 $due  = $cheque['deposit_date'] ?: $cheque['cheque_date'];
-$late = $cheque['status'] === 'pending' && $due < date('Y-m-d');
+$late = in_array($cheque['status'], ['pending', 'deposited'], true) && $due < date('Y-m-d');
 $statusChip = [
+    'deposited' => 'bg-blue-100 text-blue-700',
     'pending'   => 'bg-amber-100 text-amber-700',
     'cleared'   => 'bg-green-100 text-green-700',
     'bounced'   => 'bg-red-100 text-red-700',
@@ -107,8 +108,9 @@ $statusChip = [
   <div class="mt-3 space-y-2 pb-4" x-data="{bounce:false}">
     <form method="post" action="<?= e(url("cheques/{$cheque['id']}/status")) ?>">
       <?= csrf_field() ?>
-      <input type="hidden" name="status" value="cleared">
-      <button class="w-full rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white">
+      <input type="hidden" name="status" value="deposited">
+      <p class="mb-2 text-center text-[11px] text-blue-700">First mark the cheque as deposited; it remains a receivable until it clears.</p>
+      <button class="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white">
         ✅ Cleared — money is in the bank
       </button>
     </form>
@@ -139,6 +141,21 @@ $statusChip = [
       <button class="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-500">
         Cancel this cheque
       </button>
+    </form>
+  </div>
+<?php elseif ($cheque['status'] === 'deposited'): ?>
+  <div class="mt-3 space-y-2 pb-4" x-data="{bounce:false}">
+    <form method="post" action="<?= e(url("cheques/{$cheque['id']}/status")) ?>">
+      <?= csrf_field() ?>
+      <input type="hidden" name="status" value="cleared">
+      <button class="w-full rounded-xl bg-green-600 px-4 py-3 text-sm font-semibold text-white">Cleared — money is in the bank</button>
+    </form>
+    <button @click="bounce = !bounce" class="w-full rounded-xl border border-red-200 px-4 py-3 text-sm font-medium text-red-600">It bounced</button>
+    <form x-show="bounce" x-transition style="display:none" method="post" action="<?= e(url("cheques/{$cheque['id']}/status")) ?>" class="space-y-2 rounded-xl bg-red-50 p-3 ring-1 ring-red-100">
+      <?= csrf_field() ?>
+      <input type="hidden" name="status" value="bounced">
+      <input type="text" name="bounce_reason" placeholder="Reason" class="w-full rounded-lg border border-red-200 px-3 py-2 text-sm">
+      <button class="w-full rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white">Confirm bounce</button>
     </form>
   </div>
 <?php else: ?>

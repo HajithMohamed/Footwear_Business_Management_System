@@ -13,7 +13,12 @@ use App\Services\StorageService;
 
 class ChequeController extends Controller
 {
-    private const STATUSES = ['pending', 'cleared', 'bounced', 'cancelled'];
+    private const STATUSES = ['pending', 'deposited', 'cleared', 'bounced', 'cancelled'];
+
+    private const TRANSITIONS = [
+        'pending'   => ['deposited', 'bounced', 'cancelled'],
+        'deposited' => ['cleared', 'bounced'],
+    ];
 
     private Cheque $cheques;
 
@@ -27,6 +32,11 @@ class ChequeController extends Controller
         $status = $request->query('status', 'pending');
         if (!in_array($status, self::STATUSES, true)) {
             $status = 'pending';
+        }
+        if (!in_array($status, self::TRANSITIONS[$cheque['status']] ?? [], true)) {
+            Session::flash('error', 'That cheque status change is not allowed.');
+            $this->redirect("cheques/{$id}");
+            return;
         }
 
         $this->view('cheques/index', [

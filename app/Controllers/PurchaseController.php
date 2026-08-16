@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\Controller;
+use App\Core\Database;
 use App\Core\Request;
 use App\Core\Session;
 use App\Models\Brand;
@@ -78,6 +79,91 @@ class PurchaseController extends Controller
             'extraction' => null,
             'draft'      => $this->blankDraft(),
         ]);
+    }
+
+    /** Edit is intentionally available only before physical receiving begins. */
+    public function edit(Request $request, array $params): void
+    {
+        $purchase = $this->purchases->findWithRelations((int) $params['id']);
+        if (!$purchase) {
+            $this->abort(404, 'Purchase not found.');
+        }
+        if (Purchase::statusAtLeast($purchase['status'], 'arrived')) {
+            Session::flash('error', 'A received shipment cannot be edited; use the arrival record for the audit trail.');
+            $this->redirect('purchases/' . $purchase['id']);
+        }
+
+        $this->renderForm([
+            'title'      => 'Edit ' . $purchase['purchase_number'],
+            'extraction' => null,
+            'draft'      => $purchase,
+            'formAction' => 'purchases/' . $purchase['id'],
+        ]);
+    }
+
+    public function update(Request $request, array $params): void
+    {
+        $purchaseId = (int) $params['id'];
+        $purchase = $this->purchases->find($purchaseId);
+        if (!$purchase) {
+            $this->abort(404, 'Purchase not found.');
+        }
+        if (Purchase::statusAtLeast($purchase['status'], 'arrived')) {
+            Session::flash('error', 'Received shipments cannot be changed.');
+            $this->redirect('purchases/' . $purchaseId);
+        }
+
+        $input = $request->all();
+        $supplier = trim((string) ($input['supplier_name'] ?? ''));
+        $lines = $this->collectItems($input);
+        if ($supplier === '' || !$lines) {
+            $errors = [];
+            if ($supplier === '') $errors['supplier_name'] = ['Supplier name is required.'];
+            if (!$lines) $errors['items'] = ['Add at least one product line.'];
+            $this->withErrors($errors, $input);
+        }
+
+        Database::instance()->transaction(function () use ($purchaseId, $input, $supplier, $lines): void {
+            $this->purchases->update($purchaseId, [
+                'supplier_name'         => $supplier,
+                'supplier_invoice_no'   => trim((string) ($input['supplier_invoice_no'] ?? '')) ?: null,
+                'invoice_date'          => $this->dateOrNull($input['invoice_date'] ?? ''),
+                'purchase_date'         => $this->dateOrNull($input['purchase_date'] ?? '') ?? date('Y-m-d'),
+                'expected_arrival_date' => $this->dateOrNull($input['expected_arrival_date'] ?? ''),
+                'total_invoice_value'   => max(0, (float) ($input['total_invoice_value'] ?? 0)),
+                'total_weight_kg'       => max(0, (float) ($input['total_weight_kg'] ?? 0)),
+                'expected_parcels'      => max(0, (int) ($input['expected_parcels'] ?? 0)),
+                'notes'                 => trim((string) ($input['notes'] ?? '')) ?: null,
+            ]);
+            $this->items->deleteByPurchase($purchaseId);
+            foreach ($lines as $index => $line) {
+                $this->items->create($line + ['purchase_id' => $purchaseId, 'sort_order' => $index]);
+            }
+            $this->items->autoMatchProducts($purchaseId);
+        });
+
+        $this->log('purchase.update', 'purchase', $purchaseId, ['lines' => count($lines)]);
+        Session::flash('success', 'Purchase details updated.');
+        $this->redirect('purchases/' . $purchaseId);
+    }
+
+    /** A draft may be discarded; anything dispatched is retained as history. */
+    public function destroy(Request $request, array $params): void
+    {
+        $purchaseId = (int) $params['id'];
+        $purchase = $this->purchases->find($purchaseId);
+        if (!$purchase) $this->abort(404, 'Purchase not found.');
+        if ($purchase['status'] !== 'draft') {
+            Session::flash('error', 'Only a draft purchase can be deleted.');
+            $this->redirect('purchases/' . $purchaseId);
+        }
+        Database::instance()->transaction(function () use ($purchaseId): void {
+            $this->items->deleteByPurchase($purchaseId);
+            $this->purchases->delete($purchaseId);
+        });
+        $this->log('purchase.delete', 'purchase', $purchaseId);
+        Session::flash('success', 'Draft purchase deleted.');
+        $this->redirect('purchases');
     }
 
     /** Chooser for the three scan-based input methods. */
@@ -238,6 +324,7 @@ class PurchaseController extends Controller
             'sizeSets'         => (new SizeSet())->active(),
             'artNos'           => (new Product())->distinctArtNumbers(),
             'colours'          => (new Product())->distinctColours(),
+            'formAction'       => 'purchases',
         ]);
     }
 

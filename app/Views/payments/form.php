@@ -68,7 +68,7 @@
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="block text-xs font-bold text-amber-800 mb-1.5 uppercase tracking-wide">Cheque Date <span class="text-red-500">*</span></label>
-          <input type="date" name="cheque_date" :required="method === 'cheque'"
+          <input type="date" name="cheque_date" value="<?= date('Y-m-d') ?>" :required="method === 'cheque'"
                  class="w-full rounded-xl border-0 bg-white px-4 py-3 text-sm font-bold ring-1 ring-amber-200 focus:ring-2 focus:ring-amber-500 transition">
         </div>
         <div>

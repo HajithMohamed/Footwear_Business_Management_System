@@ -263,7 +263,7 @@ CREATE TABLE IF NOT EXISTS cheques (
     deposit_date      DATE NULL,                     -- when the owner plans to bank it
     deposited_at      DATETIME NULL,                 -- when it was actually banked
     amount            DECIMAL(12,2) NOT NULL,
-    status            ENUM('pending','cleared','bounced','cancelled') NOT NULL DEFAULT 'pending',
+    status            ENUM('pending','deposited','cleared','bounced','cancelled') NOT NULL DEFAULT 'pending',
     bounce_reason     VARCHAR(255) NULL,
     image_path        VARCHAR(255) NULL,
     thumb_path        VARCHAR(255) NULL,

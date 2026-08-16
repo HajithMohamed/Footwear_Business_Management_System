@@ -70,11 +70,14 @@ return function (Router $r): void {
     // Purchases (static segments must stay ABOVE /purchases/{id})
     $r->get('/purchases',         'PurchaseController@index',      ['auth']);
     $r->get('/purchases/create',  'PurchaseController@create',     ['auth']);
+    $r->get('/purchases/{id}/edit', 'PurchaseController@edit',     ['auth']);
     $r->get('/purchases/import',  'PurchaseController@importForm', ['auth']);
     $r->post('/purchases/import', 'PurchaseController@import',     ['auth']);
     $r->get('/purchases/local',   'LocalPurchaseController@create', ['auth']);
     $r->post('/purchases/local',  'LocalPurchaseController@store',  ['auth']);
     $r->post('/purchases',        'PurchaseController@store',      ['auth']);
+    $r->post('/purchases/{id}',   'PurchaseController@update',     ['auth']);
+    $r->post('/purchases/{id}/delete', 'PurchaseController@destroy', ['auth', 'admin']);
     $r->get('/purchases/{id}',    'PurchaseController@show',       ['auth']);
 
     // Clearance assignment (many agents <-> many purchases)
