@@ -23,8 +23,8 @@ $current  = array_search($purchase['status'], $statuses, true);
     <div class="mt-3 flex gap-3 text-xs font-semibold">
       <a href="<?= e(url('purchases/' . $purchase['id'] . '/edit')) ?>" class="text-brand-600">Edit purchase</a>
       <?php if ($purchase['status'] === 'draft'): ?>
-        <form method="post" action="<?= e(url('purchases/' . $purchase['id'] . '/delete')) ?>" onsubmit="return confirm('Delete this draft purchase?')">
-          <?= csrf_field() ?><button class="text-red-600">Delete draft</button>
+        <form method="post" action="<?= e(url('purchases/' . $purchase['id'] . '/delete')) ?>" x-data @submit.prevent="$dispatch('confirm-action', {title:'Delete Purchase', message:'Delete this purchase? This may also affect its shipment, verification, products, and related records. Only safe drafts can be removed.', confirmText:'Delete Purchase', type:'danger', onConfirm:()=>$el.submit()})">
+          <?= csrf_field() ?><button class="inline-flex items-center gap-1.5 text-red-600"><?= ui_icon('trash', 'h-4 w-4') ?> Delete Purchase</button>
         </form>
       <?php endif; ?>
     </div>
@@ -44,7 +44,7 @@ $current  = array_search($purchase['status'], $statuses, true);
 </div>
 
 <!-- Next Action Banner -->
-<?php if (!Purchase::statusAtLeast($purchase['status'], 'verified')): ?>
+<?php if (!Purchase::statusAtLeast($purchase['status'], 'completed')): ?>
   <div class="mb-6 rounded-2xl bg-brand-50 p-4 ring-1 ring-brand-200">
     <p class="text-xs font-bold text-brand-600 uppercase tracking-wide mb-1">Next Step</p>
     <?php if ($purchase['status'] === 'draft' || $purchase['status'] === 'ordered'): ?>
@@ -54,7 +54,7 @@ $current  = array_search($purchase['status'], $statuses, true);
       <p class="text-sm text-brand-800 mb-3">The clearance person has been assigned. Mark the shipment as in transit when it leaves.</p>
       <form method="post" action="<?= e(url('purchases/' . $purchase['id'] . '/in-transit')) ?>" class="inline-block">
         <?= csrf_field() ?>
-        <button class="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm">🚚 Mark as in transit</button>
+        <button class="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm"><?= ui_icon('truck', 'h-4 w-4') ?> Mark as in transit</button>
       </form>
     <?php elseif ($purchase['status'] === 'in_transit'): ?>
       <p class="text-sm text-brand-800 mb-3">Goods are on the way. Once they arrive at the shop, start the arrival verification process to count them.</p>
@@ -68,11 +68,11 @@ $current  = array_search($purchase['status'], $statuses, true);
       <a href="<?= e(url('purchases/' . $purchase['id'] . '/arrival')) ?>" class="inline-block rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm">Continue Verification</a>
     <?php endif; ?>
   </div>
-<?php elseif ($purchase['status'] === 'verified' && !$purchase['costed_at']): ?>
+<?php elseif ($purchase['status'] === 'completed' && !$purchase['costed_at']): ?>
   <div class="mb-6 rounded-2xl bg-amber-50 p-4 ring-1 ring-amber-200">
     <p class="text-xs font-bold text-amber-600 uppercase tracking-wide mb-1">Next Step</p>
     <p class="text-sm text-amber-800 mb-3">The goods are verified and in stock, but you haven't calculated the landed costs yet.</p>
-    <a href="<?= e(url('purchases/' . $purchase['id'] . '/costing')) ?>" class="inline-block rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm">🧾 Calculate Landed Costs</a>
+    <a href="<?= e(url('purchases/' . $purchase['id'] . '/costing')) ?>" class="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm"><?= ui_icon('calculator', 'h-4 w-4') ?> Calculate Landed Costs</a>
   </div>
 <?php endif; ?>
 
@@ -80,7 +80,7 @@ $current  = array_search($purchase['status'], $statuses, true);
 <div class="mb-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
   <div class="flex items-center justify-between mb-3">
     <p class="text-sm font-semibold text-slate-700">Shipment Details</p>
-    <?php if (!Purchase::statusAtLeast($purchase['status'], 'verified')): ?>
+    <?php if (!Purchase::statusAtLeast($purchase['status'], 'completed')): ?>
       <a href="<?= e(url('purchases/' . $purchase['id'] . '/assign-clearance')) ?>" class="text-xs font-semibold text-brand-600">+ Assign Clearance</a>
     <?php endif; ?>
   </div>
@@ -123,10 +123,12 @@ $current  = array_search($purchase['status'], $statuses, true);
             </div>
             <div class="text-right flex items-center gap-3">
               <span class="text-[10px] font-semibold text-slate-500"><?= e(ucfirst(str_replace('_', ' ', $a['status']))) ?></span>
-              <form method="post" action="<?= e(url('purchases/' . $purchase['id'] . '/assignments/' . $a['id'] . '/delete')) ?>" onsubmit="return confirm('Remove this clearance assignment?')">
-                <?= csrf_field() ?>
-                <button class="text-xs text-red-600 font-semibold hover:underline">Remove</button>
-              </form>
+              <?php if (!Purchase::statusAtLeast($purchase['status'], 'completed')): ?>
+                <form method="post" action="<?= e(url('purchases/' . $purchase['id'] . '/assignments/' . $a['id'] . '/delete')) ?>" onsubmit="return confirm('Remove this clearance assignment?')">
+                  <?= csrf_field() ?>
+                  <button class="text-xs text-red-600 font-semibold hover:underline">Remove</button>
+                </form>
+              <?php endif; ?>
             </div>
           </div>
         <?php endforeach; ?>
@@ -143,7 +145,11 @@ $current  = array_search($purchase['status'], $statuses, true);
     <p class="text-sm font-semibold text-slate-700">
       Parcels <span class="text-xs font-normal text-slate-400"><?= (int) $parcelSummary['received'] ?> of <?= (int) $parcelSummary['expected'] ?> received</span>
     </p>
-    <button @click="open = !open" class="text-xs font-semibold text-brand-600" x-text="open ? 'Cancel' : '+ Log parcel'"></button>
+    <?php if (!Purchase::statusAtLeast($purchase['status'], 'completed')): ?>
+      <button @click="open = !open" class="text-xs font-semibold text-brand-600" x-text="open ? 'Cancel' : '+ Log parcel'"></button>
+    <?php else: ?>
+      <span class="text-xs font-medium text-slate-400">History locked</span>
+    <?php endif; ?>
   </div>
 
   <?php if ($parcelSummary['expected'] > 0 && $parcelSummary['received'] !== $parcelSummary['expected']): ?>
@@ -201,29 +207,31 @@ $current  = array_search($purchase['status'], $statuses, true);
     </div>
   <?php endif; ?>
 
-  <form x-show="open" x-cloak method="post" action="<?= e(url('purchases/' . $purchase['id'] . '/parcels')) ?>" enctype="multipart/form-data" class="space-y-2 rounded-xl bg-slate-50 p-3">
-    <?= csrf_field() ?>
-    <div class="grid grid-cols-2 gap-2">
-      <input name="weight_kg" type="number" step="0.01" min="0" required placeholder="Given weight kg" class="rounded-lg px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
-      <input name="arrived_weight_kg" type="number" step="0.01" min="0" placeholder="Arrived weight kg" class="rounded-lg px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
-      <input name="carton_count" type="number" min="1" value="1" placeholder="Cartons" class="rounded-lg px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
-      <input name="arrival_date" type="date" value="<?= e(date('Y-m-d')) ?>" class="rounded-lg px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
-    </div>
-    <?php if ($purchase['assignments']): ?>
-      <select name="assignment_id" class="w-full rounded-lg px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
-        <option value="">Brought by…</option>
-        <?php foreach ($purchase['assignments'] as $a): ?>
-          <option value="<?= (int) $a['id'] ?>"><?= e($a['clearance_person_name']) ?></option>
-        <?php endforeach; ?>
-      </select>
-    <?php endif; ?>
-    <div>
-      <label class="block text-[11px] font-medium text-slate-500 mb-1">Weight scale photo / Proof (optional)</label>
-      <input type="file" name="weight_photo" accept="image/jpeg,image/png,image/webp" class="block w-full text-xs text-slate-500 file:mr-2 file:rounded-full file:border-0 file:bg-brand-50 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-brand-700 hover:file:bg-brand-100">
-    </div>
-    <input name="remarks" placeholder="Remarks (optional)" class="w-full rounded-lg px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
-    <button class="w-full rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white">Log parcel as received</button>
-  </form>
+  <?php if (!Purchase::statusAtLeast($purchase['status'], 'completed')): ?>
+    <form x-show="open" x-cloak method="post" action="<?= e(url('purchases/' . $purchase['id'] . '/parcels')) ?>" enctype="multipart/form-data" class="space-y-2 rounded-xl bg-slate-50 p-3">
+      <?= csrf_field() ?>
+      <div class="grid grid-cols-2 gap-2">
+        <input name="weight_kg" type="number" step="0.01" min="0" required placeholder="Given weight kg" class="rounded-lg px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
+        <input name="arrived_weight_kg" type="number" step="0.01" min="0" placeholder="Arrived weight kg" class="rounded-lg px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
+        <input name="carton_count" type="number" min="1" value="1" placeholder="Cartons" class="rounded-lg px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
+        <input name="arrival_date" type="date" value="<?= e(date('Y-m-d')) ?>" class="rounded-lg px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
+      </div>
+      <?php if ($purchase['assignments']): ?>
+        <select name="assignment_id" class="w-full rounded-lg px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
+          <option value="">Brought by…</option>
+          <?php foreach ($purchase['assignments'] as $a): ?>
+            <option value="<?= (int) $a['id'] ?>"><?= e($a['clearance_person_name']) ?></option>
+          <?php endforeach; ?>
+        </select>
+      <?php endif; ?>
+      <div>
+        <label class="block text-[11px] font-medium text-slate-500 mb-1">Weight scale photo / Proof (optional)</label>
+        <input type="file" name="weight_photo" accept="image/jpeg,image/png,image/webp" class="block w-full text-xs text-slate-500 file:mr-2 file:rounded-full file:border-0 file:bg-brand-50 file:px-3 file:py-1 file:text-xs file:font-semibold file:text-brand-700 hover:file:bg-brand-100">
+      </div>
+      <input name="remarks" placeholder="Remarks (optional)" class="w-full rounded-lg px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
+      <button class="w-full rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white">Log parcel as received</button>
+    </form>
+  <?php endif; ?>
 </div>
 
 <!-- Products on the invoice -->
@@ -267,7 +275,7 @@ $current  = array_search($purchase['status'], $statuses, true);
             <?php if ($doc['thumb_path']): ?>
               <img src="<?= e(StorageService::url($doc['thumb_path'])) ?>" alt="" class="h-9 w-9 shrink-0 rounded-lg object-cover">
             <?php else: ?>
-              <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-200 text-sm">📄</span>
+              <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-200 text-slate-600"><?= ui_icon('note', 'h-4 w-4') ?></span>
             <?php endif; ?>
             <span class="min-w-0">
               <span class="block truncate text-xs font-medium text-slate-700"><?= e(PurchaseAttachment::typeLabel($doc['type'])) ?></span>

@@ -6,16 +6,18 @@
     <p class="text-xs text-slate-500 mt-1">Directory & credit balances</p>
   </div>
   <a href="<?= e(url('customers/create')) ?>" class="btn btn-primary btn-sm">
-    ➕ Add
+    <?= ui_icon('plus', 'h-4 w-4') ?> Add
   </a>
 </div>
 
 <!-- Search -->
 <div class="search-bar">
   <form method="get" action="<?= e(url('customers')) ?>">
-    <span class="search-bar-icon">🔍</span>
+    <?php if (!empty($filters['status'])): ?><input type="hidden" name="status" value="<?= e($filters['status']) ?>"><?php endif; ?>
+    <span class="search-bar-icon"><?= ui_icon('search', 'h-4 w-4') ?></span>
     <input type="text" name="search" placeholder="Search customer, phone, city..." value="<?= e($filters['search'] ?? '') ?>"
-           class="search-bar-input">
+           class="search-bar-input !pr-24">
+    <button type="submit" class="absolute right-2 top-1/2 -translate-y-1/2 rounded-xl bg-brand-600 px-3 py-2 text-xs font-bold text-white">Search</button>
   </form>
 </div>
 
@@ -29,7 +31,7 @@
       'due' => 'Overdue',
       'risk' => 'High Risk',
       'good' => 'Good',
-      'inactive' => 'Inactive',
+      'inactive' => 'Dormant',
       'deleted' => 'Deleted',
     ];
     foreach ($pills as $val => $label):
@@ -61,9 +63,10 @@
       <?php
         $daysOverdue = (int) ($c['days_overdue'] ?? 0);
         $outstanding = (float) $c['outstanding_due'];
+        $waPhone = whatsapp_phone($c['phone'] ?? null);
         
         $statusClass = 'status-neutral';
-        $statusLabel = 'Inactive';
+        $statusLabel = 'New';
         
         if (!empty($c['deleted_at'])) {
             $statusLabel = 'Deleted';
@@ -79,23 +82,28 @@
                 $statusLabel = 'Good Standing';
                 $statusClass = 'status-good';
             }
+        } elseif (empty($c['last_purchase_date'])) {
+            $statusLabel = 'New';
+            $statusClass = 'status-neutral';
+        } elseif (strtotime($c['last_purchase_date']) >= strtotime('-60 days')) {
+            $statusLabel = 'Active';
+            $statusClass = 'status-good';
         } else {
-            if ($c['last_purchase_date'] && strtotime($c['last_purchase_date']) >= strtotime('-60 days')) {
-                $statusLabel = 'Active';
-                $statusClass = 'status-good';
-            }
+            $statusLabel = 'Dormant';
+            $statusClass = 'status-neutral';
         }
         
         $creditUsed = $c['credit_limit'] > 0 ? min(100, round(($outstanding / $c['credit_limit']) * 100)) : 0;
       ?>
-      <div class="card overflow-hidden relative <?= !empty($c['deleted_at']) ? 'opacity-60' : '' ?>">
+      <div class="card overflow-hidden relative <?= !empty($c['deleted_at']) ? 'opacity-60' : '' ?> cursor-pointer hover:border-brand-300 transition-colors"
+           onclick="window.location='<?= e(url("customers/{$c['id']}")) ?>'">
         
         <!-- Top row: Name & City -->
         <div class="flex justify-between items-start mb-3">
           <div class="min-w-0 pr-4">
             <h3 class="text-base font-bold text-slate-800 truncate"><?= e($c['name']) ?></h3>
             <p class="text-xs font-medium text-slate-500 mt-0.5 truncate">
-              📍 <?= e($c['city'] ?? $c['region'] ?? 'Unknown Location') ?>
+              <span class="inline-flex items-center gap-1"><?= ui_icon('location', 'h-3.5 w-3.5') ?> <?= e($c['city'] ?? $c['region'] ?? 'Unknown Location') ?></span>
             </p>
           </div>
           <span class="status-badge <?= $statusClass ?> shrink-0"><?= $statusLabel ?></span>
@@ -133,14 +141,25 @@
         <?php endif; ?>
 
         <!-- Quick Actions Bottom -->
-        <div class="flex justify-between items-center gap-2 pt-4 border-t border-slate-100">
-          <div class="flex gap-2">
-            <a href="tel:<?= e($c['phone'] ?? '') ?>" class="btn btn-outline btn-icon">📞</a>
-            <a href="https://wa.me/<?= preg_replace('/[^0-9]/', '', $c['phone'] ?? '') ?>" target="_blank" class="btn btn-outline btn-icon !border-green-200 !text-green-600 !bg-green-50">💬</a>
+        <div class="space-y-2 pt-4 border-t border-slate-100" onclick="event.stopPropagation()">
+          <div class="grid grid-cols-2 gap-2">
+            <a href="<?= e(url("customers/{$c['id']}/bill")) ?>" class="btn btn-outline justify-center py-2.5 text-sm"><?= ui_icon('bill', 'h-4 w-4') ?> Add Bill</a>
+            <a href="<?= e(url("customers/{$c['id']}/payment")) ?>" class="btn btn-success justify-center py-2.5 text-sm"><?= ui_icon('wallet', 'h-4 w-4') ?> Payment</a>
           </div>
-          <div class="flex gap-2 flex-1 justify-end">
-            <a href="<?= e(url("customers/{$c['id']}")) ?>" class="btn btn-outline py-2 px-3 text-sm">👁️ View</a>
-            <a href="<?= e(url("customers/{$c['id']}/payment")) ?>" class="btn btn-success py-2 px-3 text-sm flex-1 max-w-[100px]">💵 Pay</a>
+          <div class="grid grid-cols-<?= Auth::isAdmin() ? '4' : '3' ?> gap-2">
+            <?php if (!empty($c['phone'])): ?>
+              <a href="tel:<?= e($c['phone']) ?>" class="btn btn-outline min-w-0 justify-center px-2 py-2 text-[11px]" aria-label="Call <?= e($c['name']) ?>"><?= ui_icon('phone', 'h-4 w-4') ?> <span>Call</span></a>
+            <?php endif; ?>
+            <?php if ($waPhone): ?>
+              <a href="https://wa.me/<?= e($waPhone) ?>" target="_blank" rel="noopener" class="btn btn-outline min-w-0 justify-center px-2 py-2 text-[11px] !border-green-200 !bg-green-50 !text-green-700" aria-label="WhatsApp <?= e($c['name']) ?>"><?= ui_icon('users', 'h-4 w-4') ?> <span>WhatsApp</span></a>
+            <?php endif; ?>
+            <a href="<?= e(url("customers/{$c['id']}/edit")) ?>" class="btn btn-outline min-w-0 justify-center px-2 py-2 text-[11px]"><?= ui_icon('pencil', 'h-4 w-4') ?> <span>Edit</span></a>
+            <?php if (Auth::isAdmin()): ?>
+              <form method="post" action="<?= e(url("customers/{$c['id']}/delete")) ?>" class="min-w-0" x-data @submit.prevent="$dispatch('confirm-action', {title:'Delete Customer', message:'Hide this customer from the active directory? Their ledger history will be preserved.', confirmText:'Delete', type:'danger', onConfirm:()=>$el.submit()})">
+                <?= csrf_field() ?>
+                <button type="submit" class="btn btn-outline h-full w-full min-w-0 justify-center px-2 py-2 text-[11px] !border-red-200 !bg-red-50 !text-red-600"><?= ui_icon('trash', 'h-4 w-4') ?> <span>Delete</span></button>
+              </form>
+            <?php endif; ?>
           </div>
         </div>
       </div>
@@ -150,9 +169,9 @@
   <div class="empty-state mt-6">
     <div class="empty-state-icon">
       <?php if ($filters['status'] === 'due'): ?>
-        🎉
+        <?= ui_icon('check', 'h-8 w-8') ?>
       <?php else: ?>
-        📭
+        <?= ui_icon('users', 'h-8 w-8') ?>
       <?php endif; ?>
     </div>
     
@@ -164,6 +183,6 @@
       <p class="empty-state-text">Try adjusting your search or filters.</p>
     <?php endif; ?>
 
-    <a href="<?= e(url('customers/create')) ?>" class="btn btn-primary">➕ Add Customer</a>
+    <a href="<?= e(url('customers/create')) ?>" class="btn btn-primary"><?= ui_icon('plus', 'h-4 w-4') ?> Add Customer</a>
   </div>
 <?php endif; ?>

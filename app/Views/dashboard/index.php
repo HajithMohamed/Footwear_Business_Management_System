@@ -15,21 +15,22 @@ elseif ($hour < 17) $greeting = 'Good Afternoon';
 <!-- Top Core Metrics: 2x2 Grid -->
 <div class="grid grid-cols-2 gap-3 mb-6">
   
-  <!-- Sales Today -->
-  <a href="<?= e(url('sales')) ?>" class="stat-card flex flex-col justify-between">
+  <!-- Bills recorded today -->
+  <a href="<?= e(url('bills')) ?>" class="stat-card flex flex-col justify-between">
     <div class="flex justify-between items-start mb-3">
-      <div class="h-10 w-10 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center text-xl">📈</div>
+      <div class="h-10 w-10 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center"><?= ui_icon('bill') ?></div>
     </div>
     <div>
-      <p class="stat-card-label">Sales Today</p>
-      <p class="stat-card-value text-brand-700"><?= money($periods['today'] ?? 0) ?></p>
+      <p class="stat-card-label">Bills Added Today</p>
+      <p class="stat-card-value text-brand-700"><?= money($billsToday['total'] ?? 0) ?></p>
+      <p class="mt-1 text-[10px] font-bold text-slate-400"><?= (int) ($billsToday['count'] ?? 0) ?> bill(s)</p>
     </div>
   </a>
 
   <!-- Cash Received -->
   <a href="<?= e(url('finance')) ?>" class="stat-card flex flex-col justify-between">
     <div class="flex justify-between items-start mb-3">
-      <div class="h-10 w-10 rounded-full bg-green-50 text-green-600 flex items-center justify-center text-xl">💵</div>
+      <div class="h-10 w-10 rounded-full bg-green-50 text-green-600 flex items-center justify-center"><?= ui_icon('wallet') ?></div>
     </div>
     <div>
       <p class="stat-card-label">Collected Today</p>
@@ -40,7 +41,7 @@ elseif ($hour < 17) $greeting = 'Good Afternoon';
   <!-- Outstanding Credit -->
   <a href="<?= e(url('reports/receivables')) ?>" class="stat-card flex flex-col justify-between">
     <div class="flex justify-between items-start mb-3">
-      <div class="h-10 w-10 rounded-full <?= $receivables['outstanding'] > 0 ? 'bg-amber-50 text-amber-600' : 'bg-green-50 text-green-600' ?> flex items-center justify-center text-xl">🤝</div>
+      <div class="h-10 w-10 rounded-full <?= $receivables['outstanding'] > 0 ? 'bg-amber-50 text-amber-600' : 'bg-green-50 text-green-600' ?> flex items-center justify-center"><?= ui_icon('users') ?></div>
     </div>
     <div>
       <p class="stat-card-label">Outstanding Credit</p>
@@ -54,7 +55,7 @@ elseif ($hour < 17) $greeting = 'Good Afternoon';
   <?php $net = (float) ($money['net_profit'] ?? 0); $isProfit = $net >= 0; ?>
   <a href="<?= e(url('finance/profit-loss')) ?>" class="stat-card flex flex-col justify-between <?= $isProfit ? 'bg-emerald-600 text-white border-transparent' : 'bg-red-600 text-white border-transparent' ?>">
     <div class="flex justify-between items-start mb-3">
-      <div class="h-10 w-10 rounded-full bg-white/20 flex items-center justify-center text-xl">💎</div>
+      <div class="h-10 w-10 rounded-full bg-white/20 flex items-center justify-center"><?= ui_icon('chart') ?></div>
     </div>
     <div>
       <p class="text-[10px] font-bold text-white/80 uppercase tracking-wide mb-1">Approx. Profit (<?= e(date('M')) ?>)</p>
@@ -66,20 +67,20 @@ elseif ($hour < 17) $greeting = 'Good Afternoon';
 
 <!-- Quick Action Buttons -->
 <div class="grid grid-cols-2 gap-3 mb-8">
-  <a href="<?= e(url('sales/create')) ?>" class="quick-action">
-    <div class="quick-action-icon bg-brand-50 text-brand-600">🧾</div>
-    <span>New Sale</span>
+  <a href="<?= e(url('bills')) ?>" class="quick-action">
+    <div class="quick-action-icon bg-brand-50 text-brand-600"><?= ui_icon('bill') ?></div>
+    <span>Add Bill</span>
   </a>
-  <a href="<?= e(url('customers')) ?>" class="quick-action">
-    <div class="quick-action-icon bg-green-50 text-green-600">💵</div>
+  <a href="<?= e(url('payments')) ?>" class="quick-action">
+    <div class="quick-action-icon bg-green-50 text-green-600"><?= ui_icon('wallet') ?></div>
     <span>Payment</span>
   </a>
   <a href="<?= e(url('purchases/import')) ?>" class="quick-action">
-    <div class="quick-action-icon bg-slate-100 text-slate-600">🚢</div>
+    <div class="quick-action-icon bg-slate-100 text-slate-600"><?= ui_icon('purchase') ?></div>
     <span>Purchase</span>
   </a>
   <a href="<?= e(url('customers/create')) ?>" class="quick-action">
-    <div class="quick-action-icon bg-slate-100 text-slate-600">👤</div>
+    <div class="quick-action-icon bg-slate-100 text-slate-600"><?= ui_icon('users') ?></div>
     <span>Customer</span>
   </a>
 </div>
@@ -96,7 +97,7 @@ if ($hasAlerts):
       <?php if (!empty($chequesDue)): ?>
         <a href="<?= e(url('cheques')) ?>" class="alert-card alert-card-danger">
           <div class="flex items-center gap-3">
-            <span class="text-xl">🏦</span>
+            <?= ui_icon('cheque', 'h-6 w-6 shrink-0') ?>
             <div>
               <p class="font-bold text-red-900 text-sm"><?= count($chequesDue) ?> Cheque(s) Due</p>
               <p class="text-xs text-red-700">Needs deposit or follow-up</p>
@@ -109,7 +110,7 @@ if ($hasAlerts):
       <?php if (!empty($overdueCustomers) || !empty($overdueSales)): ?>
         <a href="<?= e(url('reports/receivables')) ?>" class="alert-card alert-card-warning">
           <div class="flex items-center gap-3">
-            <span class="text-xl">⏰</span>
+            <?= ui_icon('calendar', 'h-6 w-6 shrink-0') ?>
             <div>
               <p class="font-bold text-amber-900 text-sm"><?= count($overdueCustomers) + count($overdueSales) ?> Overdue Account(s)</p>
               <p class="text-xs text-amber-700">Past expected payment period</p>
@@ -122,7 +123,7 @@ if ($hasAlerts):
       <?php if (!empty($pendingParcels) || !empty($pendingQuantity)): ?>
         <a href="<?= e(url('arrivals')) ?>" class="alert-card alert-card-info">
           <div class="flex items-center gap-3">
-            <span class="text-xl">📦</span>
+            <?= ui_icon('box', 'h-6 w-6 shrink-0') ?>
             <div>
               <p class="font-bold text-brand-900 text-sm">Arrivals Pending</p>
               <p class="text-xs text-brand-700">Verify parcels and product counts</p>

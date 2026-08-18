@@ -8,6 +8,7 @@ use App\Core\Database;
 use App\Core\Request;
 use App\Core\Session;
 use App\Models\Brand;
+use App\Models\Category;
 use App\Models\ClearancePerson;
 use App\Models\Parcel;
 use App\Models\Purchase;
@@ -322,6 +323,7 @@ class PurchaseController extends Controller
             'brands'           => (new Brand())->active(),
             'clearancePersons' => (new ClearancePerson())->active(),
             'sizeSets'         => (new SizeSet())->active(),
+            'categories'       => (new Category())->active(),
             'artNos'           => (new Product())->distinctArtNumbers(),
             'colours'          => (new Product())->distinctColours(),
             'formAction'       => 'purchases',
@@ -371,6 +373,8 @@ class PurchaseController extends Controller
         $artNos     = $input['item_art_no']         ?? [];
         $colours    = $input['item_colour']         ?? [];
         $sizeSets   = $input['item_size_set_label'] ?? [];
+        $sizeSetIds = $input['item_size_set_id']    ?? [];
+        $categoryIds = $input['item_category_id']   ?? [];
         $perSet     = $input['item_pairs_per_set']  ?? [];
         $sets       = $input['item_quantity_sets']  ?? [];
         $pairs      = $input['item_quantity_pairs'] ?? [];
@@ -383,6 +387,12 @@ class PurchaseController extends Controller
             $artNo     = trim((string) ($artNos[$i] ?? ''));
             $qtyPairs  = (int) ($pairs[$i] ?? 0);
             $qtySets   = (int) ($sets[$i] ?? 0);
+            $sizeSetId = ctype_digit((string) ($sizeSetIds[$i] ?? '')) ? (int) $sizeSetIds[$i] : null;
+            $sizeSet = $sizeSetId ? (new SizeSet())->find($sizeSetId) : null;
+            $categoryId = ctype_digit((string) ($categoryIds[$i] ?? '')) ? (int) $categoryIds[$i] : null;
+            if ($sizeSet && !empty($sizeSet['category_id'])) {
+                $categoryId = (int) $sizeSet['category_id'];
+            }
 
             if ($brandName === '' && $artNo === '' && $qtyPairs === 0 && $qtySets === 0) {
                 continue;
@@ -393,8 +403,10 @@ class PurchaseController extends Controller
                 'brand_name'     => $brandName ?: null,
                 'art_no'         => $artNo ?: null,
                 'colour'         => trim((string) ($colours[$i] ?? '')) ?: null,
-                'size_set_label' => trim((string) ($sizeSets[$i] ?? '')) ?: null,
-                'pairs_per_set'  => ((int) ($perSet[$i] ?? 0)) ?: null,
+                'category_id'    => $categoryId,
+                'size_set_id'    => $sizeSetId,
+                'size_set_label' => $sizeSet ? $sizeSet['label'] : (trim((string) ($sizeSets[$i] ?? '')) ?: null),
+                'pairs_per_set'  => ((int) ($perSet[$i] ?? 0)) ?: ($sizeSet ? (int) $sizeSet['default_pairs'] : null),
                 'quantity_sets'  => $qtySets,
                 'quantity_pairs' => $qtyPairs,
                 'unit_price'     => ((float) ($rates[$i] ?? 0)) ?: null,

@@ -25,7 +25,15 @@ $fmt = fn ($v) => $v !== null && $v !== '' ? 'Rs. ' . number_format((float) $v, 
     <a href="<?= e(url('products')) ?>" class="text-slate-400">←</a>
     <h1 class="text-lg font-bold text-slate-800 truncate"><?= e($product['brand_name'] ?? 'Product') ?> <?= e($product['art_no'] ?? '') ?></h1>
   </div>
-  <a href="<?= e(url('products/'.$product['id'].'/edit')) ?>" class="shrink-0 rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white">Edit</a>
+  <div class="flex shrink-0 items-center gap-2">
+    <a href="<?= e(url('products/'.$product['id'].'/edit')) ?>" class="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-3 py-2 text-sm font-semibold text-white"><?= ui_icon('pencil', 'h-4 w-4') ?> Edit</a>
+    <?php if (Auth::isAdmin()): ?>
+      <form method="post" action="<?= e(url('products/'.$product['id'].'/delete')) ?>" x-data @submit.prevent="$dispatch('confirm-action', {title:'Delete Product', message:'Delete this product from the active catalogue? Existing purchase and stock history will remain for audit purposes.', confirmText:'Delete Product', type:'danger', onConfirm:()=>$el.submit()})">
+        <?= csrf_field() ?>
+        <button type="submit" class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-red-200 bg-red-50 text-red-600" aria-label="Delete product" title="Delete product"><?= ui_icon('trash', 'h-4 w-4') ?></button>
+      </form>
+    <?php endif; ?>
+  </div>
 </div>
 
 <!-- Gallery -->
@@ -53,7 +61,7 @@ $fmt = fn ($v) => $v !== null && $v !== '' ? 'Rs. ' . number_format((float) $v, 
     <?php endforeach; ?>
   <?php else: ?>
     <div class="aspect-square w-full rounded-xl bg-slate-100 flex items-center justify-center">
-      <span class="text-5xl text-slate-300">👟</span>
+      <?= ui_icon('box', 'h-12 w-12 text-slate-300') ?>
     </div>
     <p class="mt-2 text-center text-xs text-slate-400">No images yet — <a href="<?= e(url('products/'.$product['id'].'/edit')) ?>" class="text-brand-600">add some</a>.</p>
   <?php endif; ?>
@@ -125,3 +133,14 @@ $fmt = fn ($v) => $v !== null && $v !== '' ? 'Rs. ' . number_format((float) $v, 
   <a href="<?= e(url('products/'.$product['id'].'/edit')) ?>" class="rounded-xl bg-brand-600 px-4 py-3 text-center text-sm font-semibold text-white">Edit product</a>
   <a href="<?= e(url('products')) ?>" class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center text-sm font-medium text-slate-600">Back to list</a>
 </div>
+
+<?php if (Auth::isAdmin()): ?>
+  <div class="mt-4 rounded-2xl border border-red-100 bg-red-50 p-4">
+    <p class="text-sm font-bold text-red-700">Product controls</p>
+    <p class="mt-1 text-xs text-red-600">Deletion is recoverable data-wise because the product is soft-deleted and its business history is preserved.</p>
+    <form method="post" action="<?= e(url('products/'.$product['id'].'/delete')) ?>" class="mt-3" x-data @submit.prevent="$dispatch('confirm-action', {title:'Delete Product', message:'Delete this product from the active catalogue? Existing purchase and stock history will remain for audit purposes.', confirmText:'Delete Product', type:'danger', onConfirm:()=>$el.submit()})">
+      <?= csrf_field() ?>
+      <button class="btn btn-danger btn-full"><?= ui_icon('trash', 'h-4 w-4') ?> Delete Product</button>
+    </form>
+  </div>
+<?php endif; ?>

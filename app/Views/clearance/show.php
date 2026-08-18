@@ -1,14 +1,66 @@
 <?php 
 use App\Models\Purchase; 
 
-// Format phone for WhatsApp (assuming Sri Lanka 94 prefix if not present)
-$phoneWa = '';
-if ($person['phone']) {
-    $clean = preg_replace('/[^0-9]/', '', $person['phone']);
-    if (strlen($clean) >= 9) {
-        $phoneWa = str_starts_with($clean, '94') ? $clean : '94' . ltrim($clean, '0');
+$phoneWa = whatsapp_phone($person['phone'] ?? null);
+
+$verificationSummary = static function (array $h, array $items) use ($person): string {
+    $expected = (int) ($h['total_pairs'] ?? 0);
+    $received = (int) ($h['received_pairs'] ?? 0);
+    $verified = !empty($h['verification_status']) && $h['verification_status'] !== 'pending';
+    $lines = [
+        'SHOE BANK - CLEARANCE VERIFICATION',
+        'Clearance person: ' . $person['name'],
+        'Purchase: ' . $h['purchase_number'],
+        'Supplier: ' . $h['supplier_name'],
+        'Supplier invoice: ' . (($h['supplier_invoice_no'] ?? '') ?: 'Not recorded'),
+        'Invoice date: ' . (!empty($h['invoice_date']) ? date('j M Y', strtotime($h['invoice_date'])) : 'Not recorded'),
+        'Status: ' . Purchase::statusLabel($h['purchase_status']),
+        '',
+        'PRODUCT CHECK',
+    ];
+    foreach (array_slice($items, 0, 20) as $item) {
+        $label = trim(($item['brand_name_resolved'] ?? $item['brand_name'] ?? '') . ' ' . ($item['art_no'] ?? '')) ?: 'Unnamed item';
+        $detail = array_filter([$item['colour'] ?? '', $item['category_name'] ?? '', $item['size_set_label'] ?? '']);
+        $row = '- ' . $label . ($detail ? ' | ' . implode(' | ', $detail) : '') . ' | invoice ' . (int) $item['quantity_pairs'] . ' prs';
+        if ($verified) {
+            $row .= ' | received ' . (int) ($item['received_pairs'] ?? 0) . ' prs';
+        }
+        $lines[] = $row;
     }
-}
+    if (count($items) > 20) {
+        $lines[] = '- Plus ' . (count($items) - 20) . ' more line(s)';
+    }
+    $lines = array_merge($lines, [
+        '',
+        'Invoice lines: ' . (int) ($h['item_lines'] ?? count($items)),
+        'Expected pairs: ' . $expected,
+        'Verified received: ' . ($verified ? $received : 'Not completed'),
+        'Shortage: ' . ($verified ? max(0, $expected - $received) . ' prs' : 'Pending verification'),
+        'Assigned weight: ' . number_format((float) $h['assigned_weight_kg'], 2) . ' kg',
+        'Verified weight: ' . ((float) ($h['arrived_weight_kg'] ?? 0) > 0 ? number_format((float) $h['arrived_weight_kg'], 2) . ' kg' : 'Not recorded'),
+        'Verification status: ' . (($h['verification_status'] ?? '') ? ucfirst(str_replace('_', ' ', $h['verification_status'])) : 'Not started'),
+        '',
+        'Please review this draft and edit any note in WhatsApp before sending.',
+    ]);
+    return implode("\n", $lines);
+};
+
+$paymentSummary = static function (array $h) use ($person): string {
+    $payableWeight = (float) $h['assigned_weight_kg'];
+    return implode("\n", [
+        'SHOE BANK - CLEARANCE PAYMENT SUMMARY',
+        'Clearance person: ' . $person['name'],
+        'Purchase: ' . $h['purchase_number'],
+        'Supplier invoice: ' . (($h['supplier_invoice_no'] ?? '') ?: 'Not recorded'),
+        'Assigned payable weight: ' . number_format($payableWeight, 2) . ' kg',
+        'Rate: ' . money($h['rate_per_kg'] ?? 0) . ' / kg',
+        'Clearance amount: ' . money($h['payable_amount'] ?? $h['clearance_cost'] ?? 0),
+        'Payment status: ' . (($h['payment_status'] ?? 'pending') === 'paid' ? 'PAID' : 'PENDING'),
+        'Paid on: ' . (!empty($h['paid_at']) ? date('j M Y, h:i A', strtotime($h['paid_at'])) : 'Not paid yet'),
+        '',
+        'This is an editable WhatsApp draft. Confirm the figures before sending.',
+    ]);
+};
 
 $active = [];
 $completed = [];
@@ -36,6 +88,13 @@ foreach ($history as $h) {
     <a href="<?= e(url('clearance-persons/' . $person['id'] . '/edit')) ?>" class="shrink-0 rounded-xl bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">Edit</a>
   </div>
 </div>
+
+<?php if ($person['phone']): ?>
+  <div class="mb-4 flex gap-2">
+    <a href="tel:<?= e($person['phone']) ?>" class="btn btn-outline flex-1"><?= ui_icon('phone', 'h-4 w-4') ?> Call</a>
+    <?php if ($phoneWa): ?><a href="https://wa.me/<?= e($phoneWa) ?>" target="_blank" rel="noopener" class="btn btn-outline flex-1 text-green-700"><?= ui_icon('users', 'h-4 w-4') ?> WhatsApp</a><?php endif; ?>
+  </div>
+<?php endif; ?>
 
 <!-- Stats -->
 <div class="mb-4 grid grid-cols-2 gap-3">
@@ -68,6 +127,13 @@ foreach ($history as $h) {
   </div>
 <?php endif; ?>
 
+<?php if (count($history) > 1): ?>
+  <div class="mb-5 rounded-2xl bg-blue-50 p-4 text-sm text-blue-800 ring-1 ring-blue-200">
+    <p class="font-bold"><?= count($history) ?> invoices tracked separately</p>
+    <p class="mt-1 text-xs">Each invoice keeps its own products, verification quantities, weight and payment summary.</p>
+  </div>
+<?php endif; ?>
+
 <!-- Active Shipments -->
 <h2 class="mb-3 text-sm font-semibold text-slate-700">Currently clearing (<?= count($active) ?>)</h2>
 <div class="space-y-4 mb-6">
@@ -86,15 +152,17 @@ foreach ($history as $h) {
           </span>
         </div>
         
-        <div class="mt-3 flex items-center gap-4 text-xs">
-          <div>
-            <span class="text-slate-400">Assigned:</span> 
-            <span class="font-semibold text-slate-700"><?= number_format((float) $h['assigned_weight_kg'], 1) ?> kg</span>
-          </div>
-          <div>
-            <span class="text-slate-400">Pairs:</span> 
-            <span class="font-semibold text-slate-700"><?= (int) $h['total_pairs'] ?></span>
-          </div>
+        <div class="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+          <div><span class="block text-slate-400">Expected weight</span><span class="font-semibold text-slate-700"><?= number_format((float) $h['assigned_weight_kg'], 1) ?> kg</span></div>
+          <div><span class="block text-slate-400">Arrived weight</span><span class="font-semibold text-slate-700"><?= (float) ($h['arrived_weight_kg'] ?? 0) > 0 ? number_format((float) $h['arrived_weight_kg'], 1) . ' kg' : 'Not arrived' ?></span></div>
+          <div><span class="block text-slate-400">Expected pairs</span><span class="font-semibold text-slate-700"><?= (int) $h['total_pairs'] ?></span></div>
+          <div><span class="block text-slate-400">Verification</span><span class="font-semibold text-slate-700"><?= e($h['verification_status'] ? ucfirst(str_replace('_', ' ', $h['verification_status'])) : 'Not started') ?></span></div>
+        </div>
+
+        <div class="mt-3 flex items-center justify-between rounded-xl bg-white/80 px-3 py-2 text-xs ring-1 ring-brand-100">
+          <div><span class="text-slate-400">Clearance rate</span><p class="font-bold text-slate-700"><?= money($h['rate_per_kg'] ?? 0) ?>/kg</p></div>
+          <div class="text-right"><span class="text-slate-400">Clearance payment</span><p class="font-bold text-brand-700"><?= money($h['clearance_cost'] ?? 0) ?></p></div>
+          <span class="rounded-lg px-2 py-1 text-[10px] font-bold <?= ($h['payment_status'] ?? 'pending') === 'paid' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700' ?>"><?= ($h['payment_status'] ?? 'pending') === 'paid' ? 'Paid' : 'Pending' ?></span>
         </div>
         
         <!-- Toggle button -->
@@ -108,7 +176,7 @@ foreach ($history as $h) {
         <div class="p-3">
           <p class="text-[11px] font-semibold text-slate-500 mb-2 uppercase tracking-wide">Products</p>
           <div class="space-y-2">
-            <?php foreach (($activeItems[$h['purchase_id']] ?? []) as $item): ?>
+            <?php foreach (($invoiceItems[$h['purchase_id']] ?? []) as $item): ?>
               <div class="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-xs">
                 <div class="min-w-0">
                   <p class="truncate font-medium text-slate-700">
@@ -121,7 +189,7 @@ foreach ($history as $h) {
                 <span class="shrink-0 font-semibold text-slate-800"><?= (int) $item['quantity_pairs'] ?> <span class="font-normal text-[10px] text-slate-500">prs</span></span>
               </div>
             <?php endforeach; ?>
-            <?php if (empty($activeItems[$h['purchase_id']])): ?>
+            <?php if (empty($invoiceItems[$h['purchase_id']])): ?>
               <p class="text-xs text-slate-400 py-2">No items listed.</p>
             <?php endif; ?>
           </div>
@@ -139,6 +207,18 @@ foreach ($history as $h) {
             Open purchase
           </a>
         </div>
+        <form method="post" action="<?= e(url('clearance-persons/' . $person['id'] . '/assignments/' . $h['id'] . '/payment')) ?>" class="border-t border-slate-100 bg-white p-3">
+          <?= csrf_field() ?>
+          <input type="hidden" name="payment_status" value="<?= ($h['payment_status'] ?? 'pending') === 'paid' ? 'pending' : 'paid' ?>">
+          <button class="w-full rounded-xl px-3 py-2 text-xs font-bold <?= ($h['payment_status'] ?? 'pending') === 'paid' ? 'bg-slate-100 text-slate-600' : 'bg-green-600 text-white' ?>"><?= ($h['payment_status'] ?? 'pending') === 'paid' ? 'Mark payment as pending' : 'Mark clearance payment as paid' ?></button>
+        </form>
+        <?php if ($phoneWa): ?>
+          <div class="grid grid-cols-2 gap-2 border-t border-slate-100 bg-white p-3">
+            <a href="https://wa.me/<?= e($phoneWa) ?>?text=<?= e(rawurlencode($verificationSummary($h, $invoiceItems[$h['purchase_id']] ?? []))) ?>" target="_blank" rel="noopener" class="btn btn-outline justify-center !border-green-200 !text-green-700"><?= ui_icon('check', 'h-4 w-4') ?> Share Verification</a>
+            <a href="https://wa.me/<?= e($phoneWa) ?>?text=<?= e(rawurlencode($paymentSummary($h))) ?>" target="_blank" rel="noopener" class="btn btn-outline justify-center !border-green-200 !text-green-700"><?= ui_icon('wallet', 'h-4 w-4') ?> Share Payment</a>
+          </div>
+          <p class="bg-white px-3 pb-3 text-center text-[10px] text-slate-400">The WhatsApp draft can be edited before it is sent.</p>
+        <?php endif; ?>
       </div>
     </div>
   <?php endforeach; ?>
@@ -178,6 +258,47 @@ foreach ($history as $h) {
           <span class="text-slate-500"><?= e(Purchase::statusLabel($h['purchase_status'])) ?></span>
         <?php endif; ?>
       </div>
+      <div class="mt-2 grid grid-cols-2 gap-2 rounded-xl bg-slate-50 p-3 text-[11px] sm:grid-cols-4">
+        <div>
+          <span class="block text-slate-400">Supplier invoice</span>
+          <span class="font-semibold text-slate-700"><?= e(($h['supplier_invoice_no'] ?? '') ?: 'Not recorded') ?></span>
+        </div>
+        <div>
+          <span class="block text-slate-400">Invoice date</span>
+          <span class="font-semibold text-slate-700"><?= !empty($h['invoice_date']) ? e(date('j M Y', strtotime($h['invoice_date']))) : 'Not recorded' ?></span>
+        </div>
+        <div>
+          <span class="block text-slate-400">Expected / received</span>
+          <span class="font-semibold text-slate-700"><?= (int) ($h['total_pairs'] ?? 0) ?> / <?= (int) ($h['received_pairs'] ?? 0) ?> prs</span>
+        </div>
+        <div>
+          <span class="block text-slate-400">Shortage</span>
+          <span class="font-semibold <?= max(0, (int) ($h['total_pairs'] ?? 0) - (int) ($h['received_pairs'] ?? 0)) > 0 ? 'text-red-600' : 'text-green-700' ?>"><?= max(0, (int) ($h['total_pairs'] ?? 0) - (int) ($h['received_pairs'] ?? 0)) ?> prs</span>
+        </div>
+        <div>
+          <span class="block text-slate-400">Assigned weight</span>
+          <span class="font-semibold text-slate-700"><?= number_format((float) $h['assigned_weight_kg'], 2) ?> kg</span>
+        </div>
+        <div>
+          <span class="block text-slate-400">Verified weight</span>
+          <span class="font-semibold text-slate-700"><?= (float) ($h['arrived_weight_kg'] ?? 0) > 0 ? number_format((float) $h['arrived_weight_kg'], 2) . ' kg' : 'Not recorded' ?></span>
+        </div>
+      </div>
+      <div class="mt-2 flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-xs">
+        <span>Clearance: <strong><?= money($h['payable_amount'] ?? $h['clearance_cost'] ?? 0) ?></strong></span>
+        <span class="font-bold <?= ($h['payment_status'] ?? 'pending') === 'paid' ? 'text-green-700' : 'text-amber-700' ?>"><?= ($h['payment_status'] ?? 'pending') === 'paid' ? 'Paid' : 'Payment pending' ?></span>
+      </div>
+      <form method="post" action="<?= e(url('clearance-persons/' . $person['id'] . '/assignments/' . $h['id'] . '/payment')) ?>" class="mt-2">
+        <?= csrf_field() ?>
+        <input type="hidden" name="payment_status" value="<?= ($h['payment_status'] ?? 'pending') === 'paid' ? 'pending' : 'paid' ?>">
+        <button class="w-full rounded-xl px-3 py-2 text-xs font-bold <?= ($h['payment_status'] ?? 'pending') === 'paid' ? 'bg-slate-100 text-slate-600' : 'bg-green-600 text-white' ?>"><?= ($h['payment_status'] ?? 'pending') === 'paid' ? 'Mark payment as pending' : 'Mark clearance payment as paid' ?></button>
+      </form>
+      <?php if ($phoneWa): ?>
+        <div class="mt-2 grid grid-cols-2 gap-2">
+          <a href="https://wa.me/<?= e($phoneWa) ?>?text=<?= e(rawurlencode($verificationSummary($h, $invoiceItems[$h['purchase_id']] ?? []))) ?>" target="_blank" rel="noopener" class="btn btn-outline justify-center !border-green-200 !text-green-700">Share Verification</a>
+          <a href="https://wa.me/<?= e($phoneWa) ?>?text=<?= e(rawurlencode($paymentSummary($h))) ?>" target="_blank" rel="noopener" class="btn btn-outline justify-center !border-green-200 !text-green-700">Share Payment</a>
+        </div>
+      <?php endif; ?>
       
       <!-- Quick Costing Nav -->
       <?php if ($h['purchase_status'] === 'completed' || $h['purchase_status'] === 'verified'): ?>
@@ -188,7 +309,7 @@ foreach ($history as $h) {
             </a>
           <?php else: ?>
             <a href="<?= e(url('purchases/' . $h['purchase_id'] . '/costing')) ?>" class="block rounded-xl bg-slate-800 px-3 py-2 text-center text-xs font-semibold text-white active:bg-slate-700">
-              🧾 Cost this shipment
+              <?= ui_icon('calculator', 'inline h-4 w-4') ?> Cost this shipment
             </a>
           <?php endif; ?>
         </div>
@@ -200,19 +321,3 @@ foreach ($history as $h) {
     <p class="text-xs text-center text-slate-400 py-4">No completed shipments yet.</p>
   <?php endif; ?>
 </div>
-
-<!-- Floating Contact Actions -->
-<?php if ($person['phone']): ?>
-  <div class="fixed bottom-20 left-0 right-0 z-10 px-4 md:static md:px-0 md:bg-transparent bg-gradient-to-t from-white via-white/90 to-transparent pt-6 pb-2">
-    <div class="flex gap-3 max-w-lg mx-auto">
-      <a href="tel:<?= e($person['phone']) ?>" class="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-slate-800 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-200">
-        📞 Call
-      </a>
-      <?php if ($phoneWa): ?>
-        <a href="https://wa.me/<?= e($phoneWa) ?>" target="_blank" rel="noopener" class="flex-1 flex items-center justify-center gap-2 rounded-2xl bg-[#25D366] px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-green-100">
-          WhatsApp
-        </a>
-      <?php endif; ?>
-    </div>
-  </div>
-<?php endif; ?>

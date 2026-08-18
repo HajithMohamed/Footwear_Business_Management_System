@@ -10,8 +10,8 @@ namespace App\Services;
  * level; the owner always confirms or corrects on screen before anything is saved.
  * Every failure path returns ok=false so the caller falls back to manual entry.
  *
- * Uses the Claude Messages API over raw HTTP — this project has no Composer
- * dependencies, so there is no Anthropic SDK to call.
+ * Local Tesseract OCR is the default zero-cost reader. An Anthropic key remains
+ * an optional fallback for installations that already configured one.
  */
 class InvoiceExtractionService
 {
@@ -26,7 +26,8 @@ class InvoiceExtractionService
 
     public function isEnabled(): bool
     {
-        return trim((string) env('ANTHROPIC_API_KEY', '')) !== '';
+        return (new TesseractOcrService())->isAvailable()
+            || trim((string) env('ANTHROPIC_API_KEY', '')) !== '';
     }
 
     /**
@@ -37,9 +38,6 @@ class InvoiceExtractionService
      */
     public function extract(string $absolutePath, string $mimeType): array
     {
-        if (!$this->isEnabled()) {
-            return $this->fail('Automatic reading is switched off (no ANTHROPIC_API_KEY configured).');
-        }
         if (!is_file($absolutePath) || !is_readable($absolutePath)) {
             return $this->fail('The uploaded file could not be read from disk.');
         }
@@ -50,6 +48,26 @@ class InvoiceExtractionService
         }
         if ($size > self::MAX_BYTES) {
             return $this->fail('The file is too large to read automatically (limit 20 MB).');
+        }
+
+        $localReader = new TesseractOcrService();
+        $localFailure = null;
+        if ($localReader->isAvailable()) {
+            // Printed supplier invoices are multi-column documents. PSM 4 keeps
+            // each table row together far more reliably than the uniform-block
+            // mode used for simple bills and cheques.
+            $local = $localReader->read($absolutePath, $mimeType, 4);
+            if ($local['ok']) {
+                return [
+                    'ok' => true,
+                    'data' => (new DocumentOcrParser())->purchase($local['text'], $local['confidence'] ?? 'low'),
+                ];
+            }
+            $localFailure = $local['reason'] ?? 'Local OCR could not read the document.';
+        }
+
+        if (trim((string) env('ANTHROPIC_API_KEY', '')) === '') {
+            return $this->fail($localFailure ?: 'Tesseract OCR is not installed on this server.');
         }
 
         $block = $this->documentBlock($absolutePath, $mimeType);
@@ -140,7 +158,9 @@ class InvoiceExtractionService
         - Quantity: handwritten notes usually mark pairs, e.g. "41P" means 41 pairs.
           Put 41 in quantity_pairs. Use quantity_sets only when the document counts
           sets rather than pairs. If only one is stated, leave the other "".
-        - unit_price is the per-unit rate; line_total is that line's amount.
+        - unit_price is the printed Indian MRP/catalogue price.
+        - line_total is that line's billed amount when it is needed for invoice
+          verification; it is not a product catalogue field.
 
         confidence: "high" for clean printed text you read without difficulty;
         "medium" where some fields needed interpretation; "low" for difficult
@@ -308,23 +328,21 @@ class InvoiceExtractionService
                 continue;
             }
             $item = [
-                'brand_name'     => trim((string) ($line['brand_name'] ?? '')),
+                // Only the requested product details may come from OCR:
+                // article, size set, colour, Indian MRP and pair count.
+                'brand_name'     => '',
                 'art_no'         => trim((string) ($line['art_no'] ?? '')),
                 'colour'         => trim((string) ($line['colour'] ?? '')),
                 'size_set_label' => trim((string) ($line['size_set_label'] ?? '')),
-                'pairs_per_set'  => $this->toInt($line['pairs_per_set'] ?? ''),
-                'quantity_sets'  => $this->toInt($line['quantity_sets'] ?? ''),
+                'pairs_per_set'  => 0,
+                'quantity_sets'  => 0,
                 'quantity_pairs' => $this->toInt($line['quantity_pairs'] ?? ''),
                 'unit_price'     => $this->toFloat($line['unit_price'] ?? ''),
-                'line_total'     => $this->toFloat($line['line_total'] ?? ''),
+                'line_total'     => 0.0,
             ];
             // Drop rows the model emitted with nothing usable on them.
             if ($item['brand_name'] === '' && $item['art_no'] === '' && $item['quantity_pairs'] === 0) {
                 continue;
-            }
-            // Derive pairs from sets when only sets were written, and vice versa.
-            if ($item['quantity_pairs'] === 0 && $item['quantity_sets'] > 0 && $item['pairs_per_set'] > 0) {
-                $item['quantity_pairs'] = $item['quantity_sets'] * $item['pairs_per_set'];
             }
             $items[] = $item;
         }

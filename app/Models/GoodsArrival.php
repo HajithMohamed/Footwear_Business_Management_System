@@ -147,8 +147,13 @@ class GoodsArrival extends Model
                 $productId = $item['product_id'] ? (int) $item['product_id'] : null;
 
                 if ($productId === null) {
-                    $productId = $this->createProductFromLine($item, $userId);
-                    $productsCreated++;
+                    // A product is identified by Art Number + Category. Invoice
+                    // colours remain variants of that product, not duplicate stock cards.
+                    $productId = $this->findBaseProductFromLine($item);
+                    if ($productId === null) {
+                        $productId = $this->createProductFromLine($item, $userId);
+                        $productsCreated++;
+                    }
                     $this->db()->query(
                         'UPDATE arrival_items SET product_id = ? WHERE id = ?',
                         [$productId, $item['id']]
@@ -232,21 +237,25 @@ class GoodsArrival extends Model
             $brandId = (new Brand())->findOrCreate($brandName, 'imported') ?: null;
         }
 
+        $categoryId = $this->categoryIdForLine($item);
+        $sizeSetId = $this->sizeSetIdForLine($item, $categoryId);
+
         $name = trim(implode(' ', array_filter([
             $brandName,
             $item['art_no'] ?? '',
-            $item['colour'] ?? '',
         ])));
 
         $this->db()->query(
             'INSERT INTO products
-                (type, brand_id, art_no, name, pairs_in_set, indian_price, stock_sets, notes, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)',
+                (type, brand_id, art_no, name, category_id, size_set_id, pairs_in_set, indian_price, stock_sets, notes, created_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)',
             [
                 'imported',
                 $brandId,
                 $item['art_no'] ?: null,
                 $name !== '' ? $name : ($item['art_no'] ?: 'Imported product'),
+                $categoryId,
+                $sizeSetId,
                 $item['pairs_per_set'] ?: null,
                 $item['unit_price'] ?: null,
                 'Created automatically from an import arrival.',
@@ -255,6 +264,50 @@ class GoodsArrival extends Model
         );
 
         return $this->db()->lastInsertId();
+    }
+
+    /** Find a product already created for this Art Number + Category. */
+    private function findBaseProductFromLine(array $item): ?int
+    {
+        $artNo = strtolower(preg_replace('/[^a-z0-9]/i', '', trim((string) ($item['art_no'] ?? ''))));
+        if ($artNo === '') {
+            return null;
+        }
+        $categoryId = $this->categoryIdForLine($item);
+        $row = $this->db()->first(
+            "SELECT id FROM products
+              WHERE deleted_at IS NULL
+                AND REGEXP_REPLACE(LOWER(art_no), '[^a-z0-9]', '') = ?
+                AND category_id <=> ?
+           ORDER BY id LIMIT 1",
+            [$artNo, $categoryId]
+        );
+        return $row ? (int) $row['id'] : null;
+    }
+
+    private function categoryIdForLine(array $item): ?int
+    {
+        if (!empty($item['purchase_category_id'])) {
+            return (int) $item['purchase_category_id'];
+        }
+        $name = trim((string) ($item['category_name'] ?? ''));
+        return $name !== '' ? ((new Category())->findOrCreate($name) ?: null) : null;
+    }
+
+    private function sizeSetIdForLine(array $item, ?int $categoryId): ?int
+    {
+        if (!empty($item['purchase_size_set_id'])) {
+            return (int) $item['purchase_size_set_id'];
+        }
+        $label = trim((string) ($item['size_set_label'] ?? ''));
+        if ($label === '') {
+            return null;
+        }
+        $row = $this->db()->first(
+            'SELECT id FROM size_sets WHERE label = ? AND category_id <=> ? ORDER BY id LIMIT 1',
+            [$label, $categoryId]
+        );
+        return $row ? (int) $row['id'] : null;
     }
 
     /** Shipments arrived but not yet fully counted — dashboard widget. */

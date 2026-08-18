@@ -1,8 +1,14 @@
 <?php
+  use App\Services\StorageService;
   $outstanding = (float) $balance; // or $customer['outstanding_due']
   $creditLimit = (float) $customer['credit_limit'];
   $available = max(0, $creditLimit - $outstanding);
   $daysOverdue = (int) ($customer['days_overdue'] ?? 0);
+  $waPhone = whatsapp_phone($customer['phone'] ?? null);
+  $requestedTab = (string) request('tab', 'summary');
+  $initialTab = in_array($requestedTab, ['summary', 'ledger', 'invoices', 'payments', 'cheques', 'analytics'], true)
+      ? $requestedTab
+      : 'summary';
   
   $statusLabel = 'Inactive';
   $statusClass = 'status-neutral';
@@ -37,7 +43,7 @@
     </div>
   </div>
   <a href="<?= e(url("customers/{$customer['id']}/edit")) ?>" class="btn btn-outline btn-icon">
-    ✏️
+    <?= ui_icon('pencil') ?><span class="sr-only">Edit customer</span>
   </a>
 </div>
 
@@ -68,34 +74,64 @@
 
   <!-- Quick Action Row -->
   <div class="flex gap-2 justify-between">
-    <a href="<?= e(url("sales/create?customer_id={$customer['id']}")) ?>" class="flex-1 flex justify-center items-center h-12 rounded-xl bg-white/20 hover:bg-white/30 text-white font-bold active:scale-95 transition gap-2 shadow-sm text-sm">
-      🧾 New Sale
+    <a href="<?= e(url("customers/{$customer['id']}/bill")) ?>" class="flex-1 flex justify-center items-center h-12 rounded-xl bg-white/20 hover:bg-white/30 text-white font-bold active:scale-95 transition gap-2 shadow-sm text-sm">
+      <?= ui_icon('bill', 'h-5 w-5') ?> Add Bill
     </a>
     <a href="<?= e(url("customers/{$customer['id']}/payment")) ?>" class="flex-1 flex justify-center items-center h-12 rounded-xl bg-white text-brand-700 font-bold active:scale-95 transition gap-2 shadow-sm text-sm">
-      💵 Pay
+      <?= ui_icon('wallet', 'h-5 w-5') ?> Payment
     </a>
-    <a href="<?= e(url("customers/{$customer['id']}/bill")) ?>" class="flex-1 flex justify-center items-center h-12 rounded-xl bg-white/20 hover:bg-white/30 text-white font-bold active:scale-95 transition gap-2 shadow-sm text-sm">
-      🧾 Bill
+    <a href="<?= e(url("customers/{$customer['id']}?tab=ledger")) ?>" class="flex-1 flex justify-center items-center h-12 rounded-xl bg-white/20 hover:bg-white/30 text-white font-bold active:scale-95 transition gap-2 shadow-sm text-sm">
+      <?= ui_icon('note', 'h-5 w-5') ?> Ledger
     </a>
   </div>
+  <?php if (!empty($customer['phone'])): ?>
+    <div class="mt-3 grid grid-cols-2 gap-2 border-t border-white/20 pt-3">
+      <a href="tel:<?= e($customer['phone']) ?>" class="flex h-10 items-center justify-center gap-2 rounded-xl bg-white/15 text-xs font-bold text-white hover:bg-white/25">
+        <?= ui_icon('phone', 'h-4 w-4') ?> Call <?= e($customer['phone']) ?>
+      </a>
+      <?php if ($waPhone): ?>
+        <a href="https://wa.me/<?= e($waPhone) ?>" target="_blank" rel="noopener" class="flex h-10 items-center justify-center gap-2 rounded-xl bg-green-500/30 text-xs font-bold text-white hover:bg-green-500/40">
+          <?= ui_icon('users', 'h-4 w-4') ?> WhatsApp
+        </a>
+      <?php endif; ?>
+    </div>
+  <?php endif; ?>
+</div>
+
+<!-- Explicit carried-forward balance adjustment; every change remains in the ledger. -->
+<div class="mb-5 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100" x-data="{ open: false }">
+  <button type="button" @click="open = !open" class="flex w-full items-center justify-between text-left">
+    <span class="inline-flex items-center gap-2 text-sm font-bold text-slate-700"><?= ui_icon('plus', 'h-4 w-4') ?> Add outstanding balance</span>
+    <span class="text-xs font-bold text-brand-600" x-text="open ? 'Cancel' : 'Open'"></span>
+  </button>
+  <form x-show="open" x-cloak method="post" action="<?= e(url("customers/{$customer['id']}/outstanding")) ?>" class="mt-4 space-y-3 border-t border-slate-100 pt-4">
+    <?= csrf_field() ?>
+    <p class="text-xs text-slate-500">Use this for debt carried from outside the system. Normal new sales should use Add Bill.</p>
+    <div class="grid grid-cols-2 gap-3">
+      <label class="block"><span class="mb-1 block text-xs font-bold text-slate-600">Amount (Rs.)</span><input name="amount" type="number" min="0.01" step="0.01" required class="w-full rounded-xl border-0 bg-slate-50 px-3 py-2.5 text-sm ring-1 ring-slate-200"></label>
+      <label class="block"><span class="mb-1 block text-xs font-bold text-slate-600">Date</span><input name="transaction_date" type="date" value="<?= e(date('Y-m-d')) ?>" required class="w-full rounded-xl border-0 bg-slate-50 px-3 py-2.5 text-sm ring-1 ring-slate-200"></label>
+    </div>
+    <input name="description" maxlength="255" placeholder="Reason or reference (optional)" class="w-full rounded-xl border-0 bg-slate-50 px-3 py-2.5 text-sm ring-1 ring-slate-200">
+    <button class="btn btn-primary btn-full"><?= ui_icon('plus', 'h-4 w-4') ?> Add to Outstanding</button>
+  </form>
 </div>
 
 <!-- Tabs Dashboard -->
-<div x-data="{ tab: 'summary', ledgerView: 'timeline' }" class="mb-10">
+<div x-data="{ tab: '<?= e($initialTab) ?>', ledgerView: 'timeline' }" class="mb-10">
   <!-- Tab Navigation (Sticky) -->
   <div class="tab-nav mb-5">
     <template x-for="t in [
-      {id:'summary', icon:'📊', label:'Summary'},
-      {id:'ledger', icon:'📓', label:'Ledger'},
-      {id:'invoices', icon:'🧾', label:'Invoices'},
-      {id:'payments', icon:'💵', label:'Payments'},
-      {id:'cheques', icon:'📋', label:'Cheques'},
-      {id:'analytics', icon:'📈', label:'Activity'}
+      {id:'summary', label:'Summary'},
+      {id:'ledger', label:'Ledger'},
+      {id:'invoices', label:'History'},
+      {id:'payments', label:'Payments'},
+      {id:'cheques', label:'Cheques'},
+      {id:'analytics', label:'Activity'}
     ]">
       <button @click="tab = t.id" 
               class="tab-item"
               :class="tab === t.id ? 'tab-item-active' : ''">
-        <span x-text="t.icon"></span> <span x-text="t.label"></span>
+        <span x-text="t.label"></span>
       </button>
     </template>
   </div>
@@ -148,11 +184,10 @@
             $isDebit = $txn['transaction_type'] === 'sale';
             $isCredit = in_array($txn['transaction_type'], ['payment', 'credit_memo']);
             $dotClass = $isDebit ? 'timeline-dot-sale' : ($isCredit ? 'timeline-dot-payment' : 'timeline-dot-adjustment');
-            $icon = $isDebit ? '🧾' : ($isCredit ? '💵' : '📝');
             $ref = $txn['bill_number'] ?? $txn['reference_id'] ?? ucwords(str_replace('_', ' ', $txn['transaction_type']));
           ?>
           <div class="timeline-entry">
-            <div class="timeline-dot <?= $dotClass ?> flex items-center justify-center text-[10px] !w-6 !h-6 !-left-2 !top-0 bg-white"><?= $icon ?></div>
+            <div class="timeline-dot <?= $dotClass ?> flex items-center justify-center !w-6 !h-6 !-left-2 !top-0 bg-white"><?= ui_icon($isDebit ? 'bill' : ($isCredit ? 'wallet' : 'note'), 'h-3.5 w-3.5') ?></div>
             <div class="bg-white rounded-xl p-3 ring-1 ring-slate-200 shadow-sm">
               <div class="flex justify-between items-start mb-1">
                 <div>
@@ -166,6 +201,20 @@
                   <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-0.5">Bal: Rs. <?= number_format($txn['running_balance'], 0) ?></p>
                 </div>
               </div>
+              <?php if ($isDebit && !empty($txn['image_path'])): ?>
+                <a href="<?= e(StorageService::url($txn['image_path'])) ?>" target="_blank" class="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-brand-600"><?= ui_icon('image', 'h-4 w-4') ?> Bill image available</a>
+              <?php elseif ($isCredit && ($txn['payment_method'] ?? '') === 'cheque'): ?>
+                <div class="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  <p class="font-bold">Cheque payment<?= !empty($txn['cheque_number']) ? ' · #' . e($txn['cheque_number']) : '' ?></p>
+                  <?php if (!empty($txn['cheque_date'])): ?><p class="mt-0.5">Cheque date: <?= e(date('j M Y', strtotime($txn['cheque_date']))) ?></p><?php endif; ?>
+                  <?php if (!empty($txn['cheque_image_path'])): ?><a href="<?= e(StorageService::url($txn['cheque_image_path'])) ?>" target="_blank" class="mt-1 inline-flex items-center gap-1.5 font-bold text-amber-900"><?= ui_icon('image', 'h-4 w-4') ?> Cheque image available</a><?php endif; ?>
+                </div>
+              <?php endif; ?>
+              <?php if (($txn['reference_type'] ?? '') === 'manual_bill'): ?>
+                <a href="<?= e(url('bills/' . $txn['id'] . '/edit')) ?>" class="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-brand-600"><?= ui_icon('pencil', 'h-4 w-4') ?> Edit bill details</a>
+              <?php elseif (($txn['reference_type'] ?? '') === 'payment' && !empty($txn['reference_id'])): ?>
+                <a href="<?= e(url('payments/' . $txn['reference_id'] . '/edit')) ?>" class="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-brand-600"><?= ui_icon('pencil', 'h-4 w-4') ?> Edit payment details</a>
+              <?php endif; ?>
             </div>
           </div>
         <?php endforeach; ?>
@@ -218,10 +267,6 @@
 
   <!-- INVOICES TAB -->
   <div x-show="tab === 'invoices'" style="display: none;" class="space-y-4" x-transition>
-    <a href="<?= e(url("sales/create?customer_id={$customer['id']}")) ?>" class="btn btn-outline btn-full border-dashed !border-slate-300 !text-slate-500 hover:!border-brand-400 hover:!text-brand-600">
-      ➕ Create New Invoice
-    </a>
-
     <?php if (!empty($invoices)): ?>
       <?php foreach ($invoices as $inv): ?>
         <?php 
@@ -268,26 +313,30 @@
   <!-- PAYMENTS TAB -->
   <div x-show="tab === 'payments'" style="display: none;" class="space-y-4" x-transition>
     <a href="<?= e(url("customers/{$customer['id']}/payment")) ?>" class="btn btn-success btn-full">
-      ➕ Record Payment
+      <?= ui_icon('wallet', 'h-5 w-5') ?> Record Payment
     </a>
 
     <?php if (!empty($payments)): ?>
       <?php foreach ($payments as $pay): ?>
-        <div class="card card-compact flex justify-between items-center">
-          <div class="flex items-center gap-3">
+        <div class="card card-compact">
+          <div class="flex justify-between items-center">
+            <div class="flex items-center gap-3">
             <div class="h-10 w-10 rounded-full bg-green-50 text-green-600 flex items-center justify-center text-lg">
-              <?= $pay['payment_method'] === 'cash' ? '💵' : ($pay['payment_method'] === 'cheque' ? '📋' : '🏦') ?>
+              <?= ui_icon($pay['payment_method'] === 'cheque' ? 'cheque' : 'wallet') ?>
             </div>
             <div>
               <p class="text-sm font-bold text-slate-800"><?= ucfirst($pay['payment_method']) ?></p>
               <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide"><?= date('d M Y', strtotime($pay['created_at'])) ?></p>
             </div>
+            </div>
+            <div class="text-right">
+              <p class="text-lg font-bold text-green-600">Rs. <?= number_format($pay['amount'], 0) ?></p>
+              <?php if (!empty($pay['recorded_by_name'])): ?><p class="text-[10px] text-slate-400">By <?= e($pay['recorded_by_name']) ?></p><?php endif; ?>
+            </div>
           </div>
-          <div class="text-right">
-            <p class="text-lg font-bold text-green-600">Rs. <?= number_format($pay['amount'], 0) ?></p>
-            <?php if (!empty($pay['recorded_by_name'])): ?>
-              <p class="text-[10px] text-slate-400">By <?= e($pay['recorded_by_name']) ?></p>
-            <?php endif; ?>
+          <div class="mt-3 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3">
+            <a href="<?= e(url('payments/' . $pay['id'] . '/receipt')) ?>" class="btn btn-outline justify-center">Receipt</a>
+            <a href="<?= e(url('payments/' . $pay['id'] . '/edit')) ?>" class="btn btn-outline justify-center"><?= ui_icon('pencil', 'h-4 w-4') ?> Edit</a>
           </div>
         </div>
       <?php endforeach; ?>
@@ -365,7 +414,7 @@
         <div class="flex justify-between items-center">
           <span class="text-xs font-bold text-slate-500 uppercase tracking-wide">Risk Level</span>
           <span class="text-sm font-bold <?= $outstanding > 0 && $daysOverdue > 30 ? 'text-red-600' : 'text-green-600' ?>">
-            <?= $outstanding > 0 && $daysOverdue > 30 ? '🔴 High Risk' : '🟢 Low Risk' ?>
+            <?= $outstanding > 0 && $daysOverdue > 30 ? 'High Risk' : 'Low Risk' ?>
           </span>
         </div>
         <div class="flex justify-between items-center">
@@ -385,7 +434,7 @@
 <!-- Danger Zone / Restore -->
 <?php if (empty($customer['deleted_at'])): ?>
   <div class="mt-8 rounded-2xl bg-red-50 p-4 border border-red-100 mb-8">
-    <h3 class="text-sm font-bold text-red-800 mb-2 flex items-center gap-2">⚠️ Danger Zone</h3>
+    <h3 class="text-sm font-bold text-red-800 mb-2 flex items-center gap-2"><?= ui_icon('warning', 'h-5 w-5') ?> Danger Zone</h3>
     <p class="text-xs text-red-600 mb-4">Deleting this customer will hide them from the directory. You can restore them later.</p>
     <form method="post" action="<?= e(url("customers/{$customer['id']}/delete")) ?>" 
           x-data="{}" 
@@ -404,7 +453,7 @@
   </div>
 <?php else: ?>
   <div class="mt-8 rounded-2xl bg-slate-100 p-4 border border-slate-200 mb-8">
-    <h3 class="text-sm font-bold text-slate-800 mb-2 flex items-center gap-2">🗑️ Deleted Customer</h3>
+    <h3 class="text-sm font-bold text-slate-800 mb-2 flex items-center gap-2"><?= ui_icon('trash', 'h-5 w-5') ?> Deleted Customer</h3>
     <p class="text-xs text-slate-600 mb-4">This customer is currently deleted. Restore them to show them in the directory again.</p>
     <form method="post" action="<?= e(url("customers/{$customer['id']}/restore")) ?>">
       <?= csrf_field() ?>

@@ -16,6 +16,15 @@ return function (Router $r): void {
     // --- Dashboard -----------------------------------------------------------
     $r->get('/', 'DashboardController@index', ['auth']);
 
+    // --- Actionable notifications -------------------------------------------
+    $r->get('/notifications',                 'NotificationController@index',   ['auth']);
+    $r->post('/notifications/read',           'NotificationController@read',    ['auth']);
+    $r->post('/notifications/read-all',       'NotificationController@readAll', ['auth']);
+
+    // Local Tesseract OCR suggestions. These endpoints never save business data.
+    $r->post('/ocr/bill',                     'OcrController@bill',              ['auth']);
+    $r->post('/ocr/cheque',                   'OcrController@cheque',            ['auth']);
+
     // --- Cost Calculator -----------------------------------------------------
     $r->get('/calculator',  'CalculatorController@index',     ['auth']);
     $r->post('/calculator', 'CalculatorController@calculate', ['auth']);
@@ -37,24 +46,31 @@ return function (Router $r): void {
     $r->get('/customers/create',      'CustomerController@create', ['auth']);
     $r->post('/customers',            'CustomerController@store',  ['auth']);
     $r->get('/customers/{id}/edit',   'CustomerController@edit',   ['auth']);
+    $r->post('/customers/{id}/outstanding', 'CustomerController@addOutstanding', ['auth']);
     $r->get('/customers/{id}',        'CustomerController@show',   ['auth']);  // must stay AFTER /create
     $r->post('/customers/{id}',       'CustomerController@update', ['auth']);
     $r->post('/customers/{id}/delete','CustomerController@destroy',['auth', 'admin']);
     $r->post('/customers/{id}/restore','CustomerController@restore',['auth', 'admin']);
 
     // --- Manual customer bills (credit tracking only) -----------------------
+    $r->get('/bills',                               'CustomerBillController@selectCustomer', ['auth']);
+    $r->get('/bills/{id}/edit',                    'CustomerBillController@edit', ['auth']);
+    $r->get('/bills/{id}/receipt',                  'CustomerBillController@receipt', ['auth']);
+    $r->post('/bills/{id}',                        'CustomerBillController@update', ['auth']);
     $r->get('/customers/{customerId}/bill',       'CustomerBillController@create', ['auth']);
     $r->post('/customers/{customerId}/bill',      'CustomerBillController@store',  ['auth']);
 
     // --- Payments (within customer context) ----------------------------------
+    $r->get('/payments',                              'PaymentController@selectCustomer', ['auth']);
+    $r->get('/payments/{id}/edit',                    'PaymentController@edit', ['auth']);
+    $r->get('/payments/{id}/receipt',                'PaymentController@receipt', ['auth']);
+    $r->post('/payments/{id}',                        'PaymentController@update', ['auth']);
     $r->get('/customers/{customerId}/payment',       'PaymentController@create', ['auth']);
     $r->post('/customers/{customerId}/payment',      'PaymentController@store',  ['auth']);
     $r->get('/customers/{customerId}/payments',      'PaymentController@byCustomer', ['auth']);
 
-    // --- Sales & invoicing (static segments must stay ABOVE /sales/{id}) ------
+    // --- Legacy sale history (new customer debt is recorded through Add Bill) --
     $r->get('/sales',              'SalesController@index',  ['auth']);
-    $r->get('/sales/create',       'SalesController@create', ['auth']);
-    $r->post('/sales',             'SalesController@store',  ['auth']);
     $r->get('/sales/{id}',         'SalesController@show',   ['auth']);
     $r->post('/sales/{id}/cancel', 'SalesController@cancel', ['auth']);
 
@@ -117,6 +133,8 @@ return function (Router $r): void {
     $r->get('/clearance-persons/{id}/edit', 'ClearancePersonController@edit',   ['auth']);
     $r->get('/clearance-persons/{id}',      'ClearancePersonController@show',   ['auth']);
     $r->post('/clearance-persons/{id}',     'ClearancePersonController@update', ['auth']);
+    $r->post('/clearance-persons/{id}/delete', 'ClearancePersonController@destroy', ['auth', 'admin']);
+    $r->post('/clearance-persons/{id}/assignments/{assignmentId}/payment', 'ClearancePersonController@updatePayment', ['auth']);
 
     // --- Cheques (standalone dashboard) --------------------------------------
     $r->get('/cheques',                    'ChequeController@index',         ['auth']);

@@ -2,6 +2,15 @@
 use App\Core\Auth;
 $user = Auth::user();
 $isAdmin = Auth::isAdmin();
+$notificationPreview = [];
+$notificationUnread = 0;
+try {
+    $notificationService = new \App\Services\NotificationService();
+    $notificationPreview = $notificationService->all(5);
+    $notificationUnread = $notificationService->unreadCount();
+} catch (\Throwable $e) {
+    // The main application remains usable while the database is being installed.
+}
 $currentPath = '/' . trim(str_replace(base_uri(), '', parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH)), '/');
 $navActive = function (string $prefix) use ($currentPath): string {
     $on = $prefix === '/' ? $currentPath === '/' : str_starts_with($currentPath, $prefix);
@@ -40,7 +49,7 @@ $navActive = function (string $prefix) use ($currentPath): string {
 <!-- Desktop Sidebar (Hidden on Mobile) -->
 <aside class="desktop-sidebar hidden md:flex">
   <a href="<?= e(url('')) ?>" class="desktop-sidebar-logo">
-    <span class="text-2xl">👞</span>
+    <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-white"><?= ui_icon('box', 'h-5 w-5') ?></span>
     <span><?= e(config('app.name')) ?></span>
   </a>
 
@@ -48,59 +57,56 @@ $navActive = function (string $prefix) use ($currentPath): string {
   <div class="desktop-sidebar-section mt-4">
     <p class="desktop-sidebar-section-title">Operations</p>
     <a href="<?= e(url('')) ?>" class="desktop-sidebar-link <?= $navActive('/') === 'text-brand-600' ? 'desktop-sidebar-link-active' : '' ?>">
-      <span class="desktop-sidebar-link-icon">🏠</span> Home
-    </a>
-    <a href="<?= e(url('sales')) ?>" class="desktop-sidebar-link <?= $navActive('/sales') === 'text-brand-600' ? 'desktop-sidebar-link-active' : '' ?>">
-      <span class="desktop-sidebar-link-icon">🧾</span> Sales
+      <span class="desktop-sidebar-link-icon"><?= ui_icon('home') ?></span> Dashboard
     </a>
     <a href="<?= e(url('customers')) ?>" class="desktop-sidebar-link <?= $navActive('/customers') === 'text-brand-600' ? 'desktop-sidebar-link-active' : '' ?>">
-      <span class="desktop-sidebar-link-icon">👥</span> Customers
+      <span class="desktop-sidebar-link-icon"><?= ui_icon('users') ?></span> Customers
     </a>
     <a href="<?= e(url('products')) ?>" class="desktop-sidebar-link <?= $navActive('/products') === 'text-brand-600' ? 'desktop-sidebar-link-active' : '' ?>">
-      <span class="desktop-sidebar-link-icon">📦</span> Products
+      <span class="desktop-sidebar-link-icon"><?= ui_icon('box') ?></span> Products / Stock
     </a>
   </div>
 
   <div class="desktop-sidebar-section">
     <p class="desktop-sidebar-section-title">Purchasing</p>
     <a href="<?= e(url('purchases')) ?>" class="desktop-sidebar-link <?= $navActive('/purchases') === 'text-brand-600' ? 'desktop-sidebar-link-active' : '' ?>">
-      <span class="desktop-sidebar-link-icon">🚢</span> Purchases
+      <span class="desktop-sidebar-link-icon"><?= ui_icon('purchase') ?></span> Purchases
     </a>
     <a href="<?= e(url('arrivals')) ?>" class="desktop-sidebar-link <?= $navActive('/arrivals') === 'text-brand-600' ? 'desktop-sidebar-link-active' : '' ?>">
-      <span class="desktop-sidebar-link-icon">✅</span> Verify Arrivals
+      <span class="desktop-sidebar-link-icon"><?= ui_icon('verify') ?></span> Verification
     </a>
     <a href="<?= e(url('clearance-persons')) ?>" class="desktop-sidebar-link <?= $navActive('/clearance') === 'text-brand-600' ? 'desktop-sidebar-link-active' : '' ?>">
-      <span class="desktop-sidebar-link-icon">🚛</span> Clearance Persons
+      <span class="desktop-sidebar-link-icon"><?= ui_icon('truck') ?></span> Clearance Persons
     </a>
   </div>
 
   <div class="desktop-sidebar-section">
     <p class="desktop-sidebar-section-title">Finance</p>
     <a href="<?= e(url('finance')) ?>" class="desktop-sidebar-link <?= $navActive('/finance') === 'text-brand-600' ? 'desktop-sidebar-link-active' : '' ?>">
-      <span class="desktop-sidebar-link-icon">💰</span> Dashboard
+      <span class="desktop-sidebar-link-icon"><?= ui_icon('wallet') ?></span> Summary
     </a>
     <a href="<?= e(url('cheques')) ?>" class="desktop-sidebar-link <?= $navActive('/cheques') === 'text-brand-600' ? 'desktop-sidebar-link-active' : '' ?>">
-      <span class="desktop-sidebar-link-icon">🏦</span> Cheques
+      <span class="desktop-sidebar-link-icon"><?= ui_icon('cheque') ?></span> Cheques
     </a>
     <a href="<?= e(url('expenses')) ?>" class="desktop-sidebar-link <?= $navActive('/expenses') === 'text-brand-600' ? 'desktop-sidebar-link-active' : '' ?>">
-      <span class="desktop-sidebar-link-icon">💸</span> Expenses
+      <span class="desktop-sidebar-link-icon"><?= ui_icon('expense') ?></span> Expenses
     </a>
     <a href="<?= e(url('reports')) ?>" class="desktop-sidebar-link <?= $navActive('/reports') === 'text-brand-600' ? 'desktop-sidebar-link-active' : '' ?>">
-      <span class="desktop-sidebar-link-icon">📊</span> Reports
+      <span class="desktop-sidebar-link-icon"><?= ui_icon('chart') ?></span> Reports
     </a>
   </div>
 
   <div class="desktop-sidebar-section mt-auto mb-4">
     <p class="desktop-sidebar-section-title">System</p>
     <a href="<?= e(url('calculator')) ?>" class="desktop-sidebar-link <?= $navActive('/calculator') === 'text-brand-600' ? 'desktop-sidebar-link-active' : '' ?>">
-      <span class="desktop-sidebar-link-icon">🧮</span> Calculator
+      <span class="desktop-sidebar-link-icon"><?= ui_icon('calculator') ?></span> Calculator
     </a>
     <a href="<?= e(url('notes')) ?>" class="desktop-sidebar-link <?= $navActive('/notes') === 'text-brand-600' ? 'desktop-sidebar-link-active' : '' ?>">
-      <span class="desktop-sidebar-link-icon">📝</span> Notes
+      <span class="desktop-sidebar-link-icon"><?= ui_icon('note') ?></span> Notes
     </a>
     <?php if ($isAdmin): ?>
     <a href="<?= e(url('settings')) ?>" class="desktop-sidebar-link <?= $navActive('/settings') === 'text-brand-600' ? 'desktop-sidebar-link-active' : '' ?>">
-      <span class="desktop-sidebar-link-icon">⚙️</span> Settings
+      <span class="desktop-sidebar-link-icon"><?= ui_icon('settings') ?></span> Settings
     </a>
     <?php endif; ?>
   </div>
@@ -112,7 +118,7 @@ $navActive = function (string $prefix) use ($currentPath): string {
     
     <!-- Mobile Brand (Hidden on Desktop) -->
     <a href="<?= e(url('')) ?>" class="md:hidden flex items-center gap-2 font-bold text-lg text-brand-600">
-      <span class="text-2xl">👞</span>
+      <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-white"><?= ui_icon('box', 'h-5 w-5') ?></span>
       <span><?= e(config('app.name')) ?></span>
     </a>
     
@@ -120,11 +126,18 @@ $navActive = function (string $prefix) use ($currentPath): string {
     <div class="hidden md:block"></div>
 
     <div class="flex items-center gap-3">
-      <!-- Notification Bell -->
-      <button class="relative p-2 text-slate-400 hover:text-brand-600 transition">
-        <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
-        <span class="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
-      </button>
+      <!-- Notification center -->
+      <div x-data="{open:false}" class="relative">
+        <button type="button" @click="open=!open" @keydown.escape.window="open=false" aria-label="Open notifications" title="Notifications"
+                :aria-expanded="open" class="relative flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 transition hover:bg-slate-100 hover:text-brand-600 focus:outline-none focus:ring-2 focus:ring-brand-500/30">
+          <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.85 23.85 0 0 0 5.454-1.31A8.97 8.97 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.97 8.97 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.3 24.3 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0"/></svg>
+          <?php if ($notificationUnread > 0): ?><span class="absolute right-0 top-0 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white ring-2 ring-white"><?= min(99, $notificationUnread) ?></span><?php endif; ?>
+        </button>
+        <div x-show="open" x-cloak x-transition @click.outside="open=false" class="fixed left-3 right-3 top-14 z-50 mt-1 overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/10 sm:absolute sm:left-auto sm:right-0 sm:w-96">
+          <div class="flex items-center justify-between border-b border-slate-100 px-4 py-3"><div><p class="font-bold text-slate-900">Notifications</p><p class="text-[11px] text-slate-500"><?= $notificationUnread ?> unread</p></div><a href="<?= e(url('notifications')) ?>" class="text-xs font-bold text-brand-600">View all</a></div>
+          <?php if ($notificationPreview): ?><div class="max-h-[60vh] divide-y divide-slate-50 overflow-y-auto"><?php foreach ($notificationPreview as $notice): ?><form method="post" action="<?= e(url('notifications/read')) ?>"><input type="hidden" name="_token" value="<?= e(csrf_token()) ?>"><input type="hidden" name="id" value="<?= e($notice['id']) ?>"><input type="hidden" name="target" value="<?= e($notice['url']) ?>"><button class="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-slate-50 <?= !$notice['read'] ? 'bg-brand-50/60' : '' ?>"><span class="mt-1 h-2 w-2 shrink-0 rounded-full <?= !$notice['read'] ? 'bg-brand-600' : 'bg-slate-200' ?>"></span><span class="min-w-0"><span class="block text-sm font-bold text-slate-800"><?= e($notice['title']) ?></span><span class="mt-0.5 block text-xs leading-5 text-slate-500"><?= e($notice['message']) ?></span><span class="mt-1 block text-[10px] font-medium text-slate-400"><?= e(date('j M Y · H:i', strtotime($notice['date']))) ?></span></span></button></form><?php endforeach; ?></div><?php else: ?><div class="px-5 py-8 text-center"><p class="text-sm font-bold text-slate-700">You're all caught up</p><p class="mt-1 text-xs text-slate-400">No reminders need attention.</p></div><?php endif; ?>
+        </div>
+      </div>
       
       <!-- User Menu -->
       <div x-data="{open:false}" class="relative">
@@ -139,11 +152,11 @@ $navActive = function (string $prefix) use ($currentPath): string {
             <p class="text-[10px] uppercase tracking-wide font-bold text-slate-500 mt-0.5"><?= e($user['role_label'] ?? '') ?></p>
           </div>
           <?php if ($isAdmin): ?>
-            <a href="<?= e(url('settings')) ?>" class="block px-4 py-3 text-sm font-medium hover:bg-slate-50 border-b border-slate-50">⚙️ Settings</a>
+            <a href="<?= e(url('settings')) ?>" class="flex items-center gap-2 px-4 py-3 text-sm font-medium hover:bg-slate-50 border-b border-slate-50"><?= ui_icon('settings', 'h-4 w-4') ?> Settings</a>
           <?php endif; ?>
           <form method="post" action="<?= e(url('logout')) ?>">
             <?= csrf_field() ?>
-            <button class="w-full text-left px-4 py-3 text-sm font-medium text-red-600 hover:bg-red-50 transition">🚪 Sign out</button>
+            <button class="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-medium text-red-600 hover:bg-red-50 transition"><?= ui_icon('logout', 'h-4 w-4') ?> Sign out</button>
           </form>
         </div>
       </div>
@@ -152,53 +165,13 @@ $navActive = function (string $prefix) use ($currentPath): string {
 </header>
 
 <!-- Main Content Area -->
-<main class="app-main mx-auto max-w-5xl px-4 pt-20">
+<main class="app-main mx-auto max-w-5xl px-4 pb-24 pt-20 md:pb-10">
   <!-- Flash Messages Partial -->
   <?php require BASE_PATH . '/app/Views/partials/flash.php'; ?>
   
   <!-- Page Content -->
   <?= $content ?>
 </main>
-
-<!-- Floating Action Button (FAB) -->
-<div class="fab-container fixed bottom-20 right-4 sm:right-auto sm:ml-[calc(1024px-4.5rem)] z-40 md:bottom-8 md:right-8 md:ml-0" x-data="{open:false}">
-  <button @click="open=true" class="h-14 w-14 rounded-full bg-brand-600 text-white shadow-lg flex items-center justify-center active:scale-95 transition hover:bg-brand-700 hover:shadow-xl">
-    <svg class="h-8 w-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-  </button>
-  
-  <!-- Action Sheet Overlay -->
-  <div class="bottom-sheet" x-show="open" style="display:none">
-    <div class="bottom-sheet-backdrop" x-show="open" x-transition.opacity @click="open=false"></div>
-    <div class="bottom-sheet-content" @click.stop x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="translate-y-full" x-transition:enter-end="translate-y-0">
-      <div class="bottom-sheet-handle"></div>
-      <h3 class="text-lg font-bold text-slate-800 mb-4 px-2">Quick Actions</h3>
-      
-      <div class="grid grid-cols-1 gap-2 mb-4">
-        <a href="<?= e(url('sales/create')) ?>" class="flex items-center gap-4 rounded-xl bg-brand-50 px-4 py-3.5 active:bg-brand-100 transition">
-          <div class="h-10 w-10 rounded-full bg-brand-600 text-white flex items-center justify-center text-lg shadow-sm">🧾</div>
-          <span class="font-bold text-brand-900 text-base">New Sale Invoice</span>
-        </a>
-        <a href="<?= e(url('customers')) ?>" class="flex items-center gap-4 rounded-xl bg-green-50 px-4 py-3.5 active:bg-green-100 transition border border-green-100">
-          <div class="h-10 w-10 rounded-full bg-green-600 text-white flex items-center justify-center text-lg shadow-sm">💵</div>
-          <span class="font-bold text-green-900 text-base">Record Payment</span>
-        </a>
-        <a href="<?= e(url('purchases/import')) ?>" class="flex items-center gap-4 rounded-xl bg-slate-50 px-4 py-3.5 active:bg-slate-100 transition border border-slate-200">
-          <div class="h-10 w-10 rounded-full bg-white text-slate-700 flex items-center justify-center text-lg shadow-sm ring-1 ring-slate-200">🚢</div>
-          <span class="font-semibold text-slate-700 text-base">New Import Purchase</span>
-        </a>
-        <a href="<?= e(url('customers/create')) ?>" class="flex items-center gap-4 rounded-xl bg-slate-50 px-4 py-3.5 active:bg-slate-100 transition border border-slate-200">
-          <div class="h-10 w-10 rounded-full bg-white text-slate-700 flex items-center justify-center text-lg shadow-sm ring-1 ring-slate-200">👤</div>
-          <span class="font-semibold text-slate-700 text-base">Add Customer</span>
-        </a>
-        <a href="<?= e(url('products/create')) ?>" class="flex items-center gap-4 rounded-xl bg-slate-50 px-4 py-3.5 active:bg-slate-100 transition border border-slate-200">
-          <div class="h-10 w-10 rounded-full bg-white text-slate-700 flex items-center justify-center text-lg shadow-sm ring-1 ring-slate-200">📦</div>
-          <span class="font-semibold text-slate-700 text-base">Add Product</span>
-        </a>
-      </div>
-      <button @click="open=false" class="w-full rounded-xl bg-slate-100 px-4 py-3.5 font-bold text-slate-600 hover:bg-slate-200 transition">Cancel</button>
-    </div>
-  </div>
-</div>
 
 <!-- Mobile Bottom Navigation (Hidden on Desktop) -->
 <nav class="mobile-bottom-nav fixed bottom-0 inset-x-0 z-30 bg-white border-t border-slate-200 pb-safe md:hidden">
@@ -244,29 +217,28 @@ $navActive = function (string $prefix) use ($currentPath): string {
             <div>
               <p class="text-[10px] font-bold text-brand-600 uppercase tracking-wider mb-2 px-1">Purchases & Receiving</p>
               <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                <a href="<?= e(url('purchases')) ?>" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 text-slate-700 font-semibold border-b border-slate-50 transition"><span class="text-xl">🚢</span> Purchases</a>
-                <a href="<?= e(url('arrivals')) ?>" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 text-slate-700 font-semibold border-b border-slate-50 transition"><span class="text-xl">🚚</span> Verify Arrivals</a>
-                <a href="<?= e(url('clearance-persons')) ?>" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 text-slate-700 font-semibold transition"><span class="text-xl">👷</span> Clearance Persons</a>
+                <a href="<?= e(url('purchases')) ?>" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 text-slate-700 font-semibold border-b border-slate-50 transition"><?= ui_icon('purchase') ?> Purchases</a>
+                <a href="<?= e(url('arrivals')) ?>" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 text-slate-700 font-semibold border-b border-slate-50 transition"><?= ui_icon('verify') ?> Verification</a>
+                <a href="<?= e(url('clearance-persons')) ?>" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 text-slate-700 font-semibold transition"><?= ui_icon('truck') ?> Clearance Persons</a>
               </div>
             </div>
 
             <div>
               <p class="text-[10px] font-bold text-brand-600 uppercase tracking-wider mb-2 px-1">Money & Insights</p>
               <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                <a href="<?= e(url('cheques')) ?>" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 text-slate-700 font-semibold border-b border-slate-50 transition"><span class="text-xl">🧾</span> Cheques</a>
-                <a href="<?= e(url('sales')) ?>" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 text-slate-700 font-semibold border-b border-slate-50 transition"><span class="text-xl">📃</span> Sales</a>
-                <a href="<?= e(url('expenses')) ?>" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 text-slate-700 font-semibold border-b border-slate-50 transition"><span class="text-xl">💸</span> Expenses</a>
-                <a href="<?= e(url('reports')) ?>" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 text-slate-700 font-semibold transition"><span class="text-xl">📊</span> Reports</a>
+                <a href="<?= e(url('cheques')) ?>" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 text-slate-700 font-semibold border-b border-slate-50 transition"><?= ui_icon('cheque') ?> Cheques</a>
+                <a href="<?= e(url('expenses')) ?>" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 text-slate-700 font-semibold border-b border-slate-50 transition"><?= ui_icon('expense') ?> Expenses</a>
+                <a href="<?= e(url('reports')) ?>" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 text-slate-700 font-semibold transition"><?= ui_icon('chart') ?> Reports</a>
               </div>
             </div>
 
             <div>
               <p class="text-[10px] font-bold text-brand-600 uppercase tracking-wider mb-2 px-1">System</p>
               <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                <a href="<?= e(url('calculator')) ?>" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 text-slate-700 font-semibold border-b border-slate-50 transition"><span class="text-xl">🧮</span> Calculator</a>
-                <a href="<?= e(url('notes')) ?>" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 text-slate-700 font-semibold border-b border-slate-50 transition"><span class="text-xl">📝</span> Notes</a>
+                <a href="<?= e(url('calculator')) ?>" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 text-slate-700 font-semibold border-b border-slate-50 transition"><?= ui_icon('calculator') ?> Calculator</a>
+                <a href="<?= e(url('notes')) ?>" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 text-slate-700 font-semibold border-b border-slate-50 transition"><?= ui_icon('note') ?> Notes</a>
                 <?php if ($isAdmin): ?>
-                <a href="<?= e(url('settings')) ?>" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 text-slate-700 font-semibold transition"><span class="text-xl">⚙️</span> Settings</a>
+                <a href="<?= e(url('settings')) ?>" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 text-slate-700 font-semibold transition"><?= ui_icon('settings') ?> Settings</a>
                 <?php endif; ?>
               </div>
             </div>

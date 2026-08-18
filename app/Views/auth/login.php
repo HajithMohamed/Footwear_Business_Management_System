@@ -1,5 +1,5 @@
 <div class="text-center mb-6">
-  <div class="mx-auto mb-3 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 text-3xl">👞</div>
+  <div class="mx-auto mb-3 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15"><?= ui_icon('box', 'h-8 w-8') ?></div>
   <h1 class="text-xl font-bold text-white"><?= e(config('app.name')) ?></h1>
   <p class="text-sm text-white/70">Sign in to manage your shop</p>
 </div>

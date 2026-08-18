@@ -14,7 +14,13 @@ $type = $val('type', 'imported');
 $init = json_encode([
     'type'       => $type,
     'brands'     => array_map(fn ($b) => ['id' => (int) $b['id'], 'name' => $b['name'], 'origin' => $b['origin']], $brands),
-    'sizePairs'  => array_reduce($sizeSets, function ($c, $s) { $c[(string) $s['id']] = (int) $s['default_pairs']; return $c; }, []),
+    'sizeMeta'   => array_reduce($sizeSets, function ($c, $s) {
+        $c[(string) $s['id']] = [
+            'pairs' => (int) $s['default_pairs'],
+            'categoryId' => $s['category_id'] !== null ? (string) $s['category_id'] : '',
+        ];
+        return $c;
+    }, []),
     'rates'      => ['lkr_rate' => (float) $defaults['lkr_rate'], 'per_kilo_clearance' => (float) $defaults['per_kilo_clearance'], 'handling' => (float) $defaults['handling_charge']],
     'brandId'    => (string) $val('brand_id'),
     'categoryId' => (string) $val('category_id'),
@@ -46,7 +52,7 @@ $init = json_encode([
   <div class="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-100">
     <span class="text-xs font-medium text-slate-500">Product type</span>
     <div class="mt-2 grid grid-cols-3 gap-2">
-      <?php foreach (['imported'=>'👞 Imported','local'=>'🏠 Local','custom'=>'🎒 Custom'] as $v=>$l): ?>
+      <?php foreach (['imported'=>'Imported','local'=>'Local','custom'=>'Custom'] as $v=>$l): ?>
         <label class="cursor-pointer">
           <input type="radio" name="type" value="<?= $v ?>" x-model="type" @change="onType" class="peer sr-only">
           <div class="rounded-xl border-2 border-slate-200 px-2 py-3 text-center text-xs font-medium text-slate-600 peer-checked:border-brand-600 peer-checked:bg-brand-50 peer-checked:text-brand-700"><?= $l ?></div>
@@ -70,7 +76,7 @@ $init = json_encode([
           <template x-for="b in filteredBrands()" :key="b.id">
             <option :value="String(b.id)" x-text="b.name"></option>
           </template>
-          <option value="__new__">➕ Add new brand…</option>
+          <option value="__new__">Add new brand…</option>
         </select>
         <input x-show="brandId==='__new__'" name="new_brand" value="<?= e(old('new_brand')) ?>"
                placeholder="New brand name" class="mt-2 w-full rounded-xl border border-brand-200 px-3 py-2.5 text-sm">
@@ -91,7 +97,7 @@ $init = json_encode([
           <?php foreach ($categories as $c): ?>
             <option value="<?= $c['id'] ?>"><?= e($c['name']) ?></option>
           <?php endforeach; ?>
-          <option value="__new__">➕ Add new category…</option>
+          <option value="__new__">Add new category…</option>
         </select>
         <input x-show="categoryId==='__new__'" name="new_category" value="<?= e(old('new_category')) ?>"
                placeholder="New category" class="mt-2 w-full rounded-xl border border-brand-200 px-3 py-2.5 text-sm">
@@ -104,7 +110,7 @@ $init = json_encode([
           <?php foreach ($sizeSets as $s): ?>
             <option value="<?= $s['id'] ?>"><?= e(($s['category_name'] ? $s['category_name'].' ' : '').$s['label']) ?> (<?= (int)$s['default_pairs'] ?> pr)</option>
           <?php endforeach; ?>
-          <option value="__new__">➕ Add new size set…</option>
+          <option value="__new__">Add new size set…</option>
         </select>
         <input x-show="sizeSetId==='__new__'" name="new_size_set" value="<?= e(old('new_size_set')) ?>"
                placeholder="e.g. 5-9" @input="onNewSize($event.target.value)"
@@ -206,7 +212,7 @@ $init = json_encode([
               <button class="shrink-0 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-white">Save</button>
             </form>
             <button type="button" onclick="if(confirm('Remove this image?')) document.getElementById('delimg<?= $img['id'] ?>').submit();"
-                    class="shrink-0 rounded-lg bg-red-50 px-2 py-1.5 text-red-600">🗑</button>
+                    aria-label="Delete image" title="Delete image" class="shrink-0 rounded-lg bg-red-50 px-2 py-1.5 text-red-600"><?= ui_icon('trash', 'h-4 w-4') ?></button>
           </div>
         <?php endforeach; ?>
       </div>
@@ -282,7 +288,7 @@ function productForm(init) {
   return {
     type: init.type,
     brands: init.brands,
-    sizePairs: init.sizePairs,
+    sizeMeta: init.sizeMeta,
     rates: init.rates,
     brandId: init.brandId,
     categoryId: init.categoryId,
@@ -310,8 +316,10 @@ function productForm(init) {
       return /^\d+$/.test(String(label).trim()) ? 1 : 0;
     },
     onSize(){
-      if (this.sizeSetId && this.sizeSetId !== '__new__' && this.sizePairs[this.sizeSetId]) {
-        this.cost.pairs_in_set = this.sizePairs[this.sizeSetId];   // auto-calc (req #2)
+      if (this.sizeSetId && this.sizeSetId !== '__new__' && this.sizeMeta[this.sizeSetId]) {
+        const selected = this.sizeMeta[this.sizeSetId];
+        this.cost.pairs_in_set = selected.pairs;
+        if (selected.categoryId) this.categoryId = selected.categoryId;
       }
       this.compute();
     },

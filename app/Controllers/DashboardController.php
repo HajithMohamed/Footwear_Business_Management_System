@@ -6,6 +6,7 @@ use App\Core\Controller;
 use App\Core\Request;
 use App\Models\Cheque;
 use App\Models\ClearancePerson;
+use App\Models\CustomerTransaction;
 use App\Models\GoodsArrival;
 use App\Models\Parcel;
 use App\Models\Product;
@@ -29,6 +30,7 @@ class DashboardController extends Controller
             'cashToday'    => $profit->cashCollected(date('Y-m-d'), date('Y-m-d')),
             'periods'      => $profit->periodRevenue(),
             'receivables'  => $profit->receivables(),
+            'billsToday'   => (new CustomerTransaction())->billsRecordedOn(date('Y-m-d')),
             'recentSales'  => (new Sale())->recent(5),
             'overdueSales' => (new Sale())->overdueCredit(5),
             'chequesDue'   => (new Cheque())->dueSoon((int) setting('cheque_reminder_days', 7), 5),

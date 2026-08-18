@@ -35,6 +35,7 @@ class ClearanceAssignmentController extends Controller
         if (!$purchase) {
             $this->abort(404, 'Purchase not found.');
         }
+        $this->rejectCompletedPurchase($purchase);
 
         $this->view('clearance/assign', [
             'title'    => 'Assign Clearance — ' . $purchase['purchase_number'],
@@ -50,6 +51,7 @@ class ClearanceAssignmentController extends Controller
         if (!$purchase) {
             $this->abort(404, 'Purchase not found.');
         }
+        $this->rejectCompletedPurchase($purchase);
 
         $input    = $request->all();
         $personId = (int) ($input['clearance_person_id'] ?? 0);
@@ -97,9 +99,11 @@ class ClearanceAssignmentController extends Controller
     public function markInTransit(Request $request, array $params): void
     {
         $purchaseId = (int) $params['id'];
-        if (!$this->purchases->find($purchaseId)) {
+        $purchase = $this->purchases->find($purchaseId);
+        if (!$purchase) {
             $this->abort(404, 'Purchase not found.');
         }
+        $this->rejectCompletedPurchase($purchase);
 
         $assigned = $this->assignments->byPurchase($purchaseId);
         if (!$assigned) {
@@ -123,6 +127,12 @@ class ClearanceAssignmentController extends Controller
             $this->abort(404, 'Assignment not found.');
         }
 
+        $purchase = $this->purchases->find($purchaseId);
+        if (!$purchase) {
+            $this->abort(404, 'Purchase not found.');
+        }
+        $this->rejectCompletedPurchase($purchase);
+
         $this->assignments->delete($assignmentId);
 
         $this->log('clearance.unassign', 'purchase', $purchaseId, ['assignment' => $assignmentId]);
@@ -134,5 +144,14 @@ class ClearanceAssignmentController extends Controller
     {
         $value = trim((string) $value);
         return preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) ? $value : date('Y-m-d');
+    }
+
+    /** Completed purchases are immutable accounting and inventory history. */
+    private function rejectCompletedPurchase(array $purchase): void
+    {
+        if (Purchase::statusAtLeast((string) $purchase['status'], 'completed')) {
+            Session::flash('error', 'This purchase is completed. Its clearance history can no longer be changed.');
+            $this->redirect('purchases/' . (int) $purchase['id']);
+        }
     }
 }

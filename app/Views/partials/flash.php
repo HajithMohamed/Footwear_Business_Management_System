@@ -3,10 +3,10 @@ $flashes = \App\Core\Session::getFlash();
 
 // Standardized icons based on type
 $icons = [
-    'success' => '✅',
-    'error'   => '❌',
-    'warning' => '⚠️',
-    'info'    => 'ℹ️',
+    'success' => 'check',
+    'error'   => 'warning',
+    'warning' => 'warning',
+    'info'    => 'info',
 ];
 
 if (!empty($flashes)): 
@@ -33,7 +33,7 @@ if (!empty($flashes)):
            x-transition:leave-end="opacity-0 scale-95"
            class="flash-message <?= $class ?> shadow-lg pointer-events-auto cursor-pointer"
            @click="show = false">
-        <span class="flash-icon"><?= $icon ?></span>
+        <span class="flash-icon"><?= ui_icon($icon, 'h-5 w-5') ?></span>
         <div class="flex-1 pt-0.5">
           <?= nl2br(e($message)) ?>
         </div>

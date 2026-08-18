@@ -3,7 +3,7 @@
 use App\Services\CostCalculator;
 
 // --- round_to_step (round UP to nearest 25) ---------------------------------
-eq(700, CostCalculator::roundToStep(712), 'roundToStep 712 → 700');
+eq(725, CostCalculator::roundToStep(712), 'roundToStep 712 → 725');
 eq(725, CostCalculator::roundToStep(715), 'roundToStep 715 → 725');
 eq(750, CostCalculator::roundToStep(749), 'roundToStep 749 → 750');
 eq(825, CostCalculator::roundToStep(815), 'roundToStep 815 → 825');
@@ -28,8 +28,8 @@ $r = CostCalculator::calculate([
 eq(148.85, $r['discounted_price'],   'worked: discounted price');
 eq(550,    $r['indian_cost_lkr'],    'worked: indian cost LKR (rounded up)');
 eq(220.0,  $r['weight_per_pair'],    'worked: weight per pair (g)');
-eq(650,    $r['clearance_per_pair'], 'worked: clearance per pair (rounded up)');
-eq(1225.0, $r['final_cost'],         'worked: final landed cost');
+eq(675,    $r['clearance_per_pair'], 'worked: clearance per pair (rounded up)');
+eq(1250.0, $r['final_cost'],         'worked: final landed cost');
 
 // --- Guards: no pairs must not divide by zero ------------------------------
 $z = CostCalculator::calculate([

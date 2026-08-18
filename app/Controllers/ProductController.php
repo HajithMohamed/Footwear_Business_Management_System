@@ -254,11 +254,17 @@ class ProductController extends Controller
             }
         }
 
-        // Existing size set selected but pairs left blank → fill from its default
-        if (!empty($data['size_set_id']) && ctype_digit((string) $data['size_set_id']) && empty($data['pairs_in_set'])) {
+        // Existing size set is the source of truth for both category and pair count.
+        // This keeps product and purchase entry consistent even if JavaScript is off.
+        if (!empty($data['size_set_id']) && ctype_digit((string) $data['size_set_id'])) {
             $ss = (new SizeSet())->find((int) $data['size_set_id']);
-            if ($ss && !empty($ss['default_pairs'])) {
-                $data['pairs_in_set'] = (int) $ss['default_pairs'];
+            if ($ss) {
+                if (!empty($ss['category_id'])) {
+                    $data['category_id'] = (int) $ss['category_id'];
+                }
+                if (empty($data['pairs_in_set']) && !empty($ss['default_pairs'])) {
+                    $data['pairs_in_set'] = (int) $ss['default_pairs'];
+                }
             }
         }
 

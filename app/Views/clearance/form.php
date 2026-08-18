@@ -22,8 +22,10 @@ $action = $person
 
     <div>
       <label class="block text-xs font-medium text-slate-500 mb-1">Mobile number</label>
-      <input name="phone" value="<?= e(old('phone', $person['phone'] ?? '')) ?>"
+      <input name="phone" type="tel" inputmode="tel" placeholder="+94 77 123 4567" value="<?= e(old('phone', $person['phone'] ?? '')) ?>"
              class="w-full rounded-xl px-3 py-2 text-sm ring-1 ring-slate-200">
+      <p class="mt-1 text-xs text-slate-400">Local numbers are saved automatically with +94.</p>
+      <?php if ($msg = error('phone')): ?><p class="mt-1 text-xs text-red-600"><?= e($msg) ?></p><?php endif; ?>
     </div>
 
     <div>

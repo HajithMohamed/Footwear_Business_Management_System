@@ -16,6 +16,8 @@ class ArrivalItem extends Model
         return $this->db()->all(
             'SELECT ai.*,
                     pi.brand_name, pi.art_no, pi.colour, pi.size_set_label,
+                    pi.category_id AS purchase_category_id,
+                    pi.size_set_id AS purchase_size_set_id,
                     pi.pairs_per_set, pi.quantity_sets, pi.unit_price,
                     b.name AS mapped_brand_name,
                     cat.name AS category_name,
@@ -29,12 +31,13 @@ class ArrivalItem extends Model
           LEFT JOIN brands b    ON b.id  = pi.brand_id
           LEFT JOIN products pr ON pr.id = ai.product_id
           LEFT JOIN size_sets ss ON (
-                    ss.label = pi.size_set_label
+                    ss.id = pi.size_set_id
+                 OR ss.label = pi.size_set_label
                  OR ss.label = REPLACE(REPLACE(LOWER(pi.size_set_label), "x", "-"), " ", "")
                  OR REPLACE(REPLACE(ss.label, "-", ""), " ", "")
                     = REPLACE(REPLACE(REPLACE(LOWER(pi.size_set_label), "x", ""), "-", ""), " ", "")
                 )
-          LEFT JOIN categories cat ON cat.id = ss.category_id
+          LEFT JOIN categories cat ON cat.id = COALESCE(pi.category_id, ss.category_id)
               WHERE ai.arrival_id = ?
            ORDER BY cat.name, pi.art_no, pi.sort_order, pi.id',
             [$arrivalId]

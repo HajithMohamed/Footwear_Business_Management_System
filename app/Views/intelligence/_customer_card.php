@@ -72,7 +72,7 @@ $outstanding = (float) ($c['outstanding_due'] ?? 0);
   <div class="mt-2 flex gap-2">
     <?php if (!empty($c['phone'])): ?>
       <a href="tel:<?= e($c['phone']) ?>" class="rounded bg-slate-100 px-2.5 py-1.5 text-[11px] font-medium text-slate-700">📞 Call</a>
-      <a href="https://wa.me/<?= preg_replace('/[^0-9]/', '', $c['phone']) ?>" target="_blank" rel="noopener"
+      <a href="https://wa.me/<?= e(whatsapp_phone($c['phone'])) ?>" target="_blank" rel="noopener"
          class="rounded bg-green-100 px-2.5 py-1.5 text-[11px] font-medium text-green-700">💬 WhatsApp</a>
     <?php endif; ?>
     <a href="<?= e(url("customers/{$c['customer_id']}/ledger")) ?>"

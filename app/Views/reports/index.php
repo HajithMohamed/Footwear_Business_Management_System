@@ -59,30 +59,30 @@
 <h2 class="mt-6 mb-2 text-sm font-semibold text-slate-500">All reports</h2>
 <div class="grid grid-cols-2 gap-3">
   <a href="<?= e(url('reports/stock')) ?>" class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100 active:scale-[.99] transition hover:ring-brand-600">
-    <div class="text-2xl">📦</div><p class="mt-1 text-sm font-medium text-slate-700">Stock valuation</p>
+    <?= ui_icon('box', 'h-6 w-6 text-brand-600') ?><p class="mt-1 text-sm font-medium text-slate-700">Stock valuation</p>
   </a>
   <a href="<?= e(url('reports/imports')) ?>" class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100 active:scale-[.99] transition hover:ring-brand-600">
-    <div class="text-2xl">🚢</div><p class="mt-1 text-sm font-medium text-slate-700">Import spend</p>
+    <?= ui_icon('purchase', 'h-6 w-6 text-brand-600') ?><p class="mt-1 text-sm font-medium text-slate-700">Import spend</p>
   </a>
   <a href="<?= e(url('reports/clearance')) ?>" class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100 active:scale-[.99] transition hover:ring-brand-600">
-    <div class="text-2xl">🚚</div><p class="mt-1 text-sm font-medium text-slate-700">Clearance spend</p>
+    <?= ui_icon('truck', 'h-6 w-6 text-brand-600') ?><p class="mt-1 text-sm font-medium text-slate-700">Clearance spend</p>
   </a>
   <a href="<?= e(url('reports/costs')) ?>" class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100 active:scale-[.99] transition hover:ring-brand-600">
-    <div class="text-2xl">📈</div><p class="mt-1 text-sm font-medium text-slate-700">Cost changes</p>
+    <?= ui_icon('chart', 'h-6 w-6 text-brand-600') ?><p class="mt-1 text-sm font-medium text-slate-700">Cost changes</p>
   </a>
   <a href="<?= e(url('reports/receivables')) ?>" class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100 active:scale-[.99] transition hover:ring-brand-600">
-    <div class="text-2xl">💰</div><p class="mt-1 text-sm font-medium text-slate-700">Receivables</p>
+    <?= ui_icon('wallet', 'h-6 w-6 text-brand-600') ?><p class="mt-1 text-sm font-medium text-slate-700">Receivables</p>
   </a>
   <a href="<?= e(url('finance/profit-loss')) ?>" class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100 active:scale-[.99] transition hover:ring-brand-600">
-    <div class="text-2xl">🧾</div><p class="mt-1 text-sm font-medium text-slate-700">Profit &amp; loss</p>
+    <?= ui_icon('bill', 'h-6 w-6 text-brand-600') ?><p class="mt-1 text-sm font-medium text-slate-700">Profit &amp; loss</p>
   </a>
   <a href="<?= e(url('finance/brands')) ?>" class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100 active:scale-[.99] transition hover:ring-brand-600">
-    <div class="text-2xl">🏷️</div><p class="mt-1 text-sm font-medium text-slate-700">Brand profit</p>
+    <?= ui_icon('chart', 'h-6 w-6 text-brand-600') ?><p class="mt-1 text-sm font-medium text-slate-700">Brand profit</p>
   </a>
   <a href="<?= e(url('finance/products')) ?>" class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100 active:scale-[.99] transition hover:ring-brand-600">
-    <div class="text-2xl">👟</div><p class="mt-1 text-sm font-medium text-slate-700">Product profit</p>
+    <?= ui_icon('box', 'h-6 w-6 text-brand-600') ?><p class="mt-1 text-sm font-medium text-slate-700">Product profit</p>
   </a>
   <a href="<?= e(url('intelligence')) ?>" class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100 active:scale-[.99] transition hover:ring-brand-600">
-    <div class="text-2xl">🧠</div><p class="mt-1 text-sm font-medium text-slate-700">Customer insights</p>
+    <?= ui_icon('users', 'h-6 w-6 text-brand-600') ?><p class="mt-1 text-sm font-medium text-slate-700">Customer insights</p>
   </a>
 </div>
