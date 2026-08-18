@@ -95,11 +95,21 @@ $fmt = fn ($v) => $v !== null && $v !== '' ? 'Rs. ' . number_format((float) $v, 
     </div>
   </div>
   <?php if ($product['type'] === 'imported'): ?>
-    <div class="mt-3 rounded-xl bg-brand-50 p-3 text-sm">
-      <div class="flex justify-between"><span class="text-slate-500">Landed cost / pair</span><span class="font-bold text-brand-600"><?= $fmt($product['final_cost']) ?></span></div>
-      <div class="mt-1 flex justify-between text-xs text-slate-400">
-        <span>Indian ₹<?= e($product['indian_price']) ?> · <?= (float)$product['discount_percent'] ?>% off · @<?= e($product['lkr_rate_used']) ?></span>
+    <div class="mt-3 rounded-xl bg-brand-50 p-4 border border-brand-200">
+      <div class="flex items-center justify-between mb-3 border-b border-brand-100 pb-2">
+        <span class="text-xs font-bold text-brand-700 uppercase tracking-wider">Indian Cost Basis</span>
+        <div class="flex items-center gap-2">
+          <span class="rounded bg-brand-100 px-2 py-1 text-xs font-bold text-brand-800">₹<?= e($product['indian_price']) ?></span>
+          <span class="text-[11px] font-semibold text-brand-600">@ <?= e($product['lkr_rate_used']) ?> LKR</span>
+        </div>
       </div>
+      <div class="flex justify-between items-center">
+        <span class="text-sm font-semibold text-brand-800">Final Landed Cost</span>
+        <span class="text-lg font-bold text-brand-600"><?= $fmt($product['final_cost']) ?></span>
+      </div>
+      <?php if ((float)$product['discount_percent'] > 0): ?>
+        <p class="mt-1 text-[10px] text-brand-500 font-semibold text-right">Includes <?= (float)$product['discount_percent'] ?>% discount</p>
+      <?php endif; ?>
     </div>
   <?php endif; ?>
 </div>

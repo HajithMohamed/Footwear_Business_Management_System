@@ -43,7 +43,8 @@ class Parcel extends Model
                 (SELECT expected_parcels FROM purchases WHERE id = ?) AS expected,
                 COUNT(*) AS logged,
                 COALESCE(SUM(status = "received"), 0) AS received,
-                COALESCE(SUM(CASE WHEN status = "received" THEN weight_kg END), 0) AS weight
+                COALESCE(SUM(CASE WHEN status = "received"
+                    THEN COALESCE(arrived_weight_kg, weight_kg) END), 0) AS weight
                FROM parcels WHERE purchase_id = ?',
             [$purchaseId, $purchaseId]
         ) ?: [];

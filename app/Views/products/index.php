@@ -89,6 +89,12 @@ $qs = function (array $overrides) use ($filters): string {
             </span>
             <span class="text-[11px] text-slate-400"><?= (int) $p['stock_sets'] ?> sets</span>
           </div>
+          <?php if ($p['type'] === 'imported' && !empty($p['indian_price'])): ?>
+            <div class="mt-1.5 border-t border-slate-100 pt-1.5 flex items-center justify-between">
+              <span class="text-[10px] font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">₹<?= e($p['indian_price']) ?></span>
+              <span class="text-[10px] text-slate-400">Rate: <?= e($p['lkr_rate_used'] ?? '—') ?></span>
+            </div>
+          <?php endif; ?>
         </div>
       </a>
     <?php endforeach; ?>
