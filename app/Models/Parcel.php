@@ -57,7 +57,10 @@ class Parcel extends Model
             'logged'   => (int) ($row['logged'] ?? 0),
             'received' => $received,
             'weight'   => (float) ($row['weight'] ?? 0),
-            'matches'  => $expected > 0 && $expected === $received,
+            // New purchases do not ask the client for a parcel count. When the
+            // expected count is unknown, at least one measured parcel means the
+            // parcel-weight step has started/completed for confirmation gating.
+            'matches'  => $expected > 0 ? $expected === $received : $received > 0,
         ];
     }
 

@@ -94,6 +94,10 @@ class GoodsArrival extends Model
             $reasons[] = 'Inventory has already been updated for this shipment.';
         }
 
+        if ((float) ($arrival['weight_expected_kg'] ?? 0) <= 0) {
+            $reasons[] = 'Save the client-supplied total shipment weight.';
+        }
+
         $expected = (int) $arrival['parcels_expected'];
         $received = (int) $arrival['parcels_received'];
         if ($expected > 0 && $received < $expected && (int) $arrival['partial_receipt'] !== 1) {
@@ -106,6 +110,23 @@ class GoodsArrival extends Model
             $reasons[] = 'This purchase has no invoice lines to verify.';
         } elseif ((int) ($totals['pending'] ?? 0) > 0) {
             $reasons[] = $totals['pending'] . ' product line(s) still need a received quantity.';
+        }
+
+        $parcelSummary = (new Parcel())->summary((int) $arrival['purchase_id']);
+        if ((int) $parcelSummary['received'] === 0) {
+            $reasons[] = 'Log each arrived parcel and its weight before confirming.';
+        }
+
+        $setupMissing = ['brand' => 0, 'category' => 0, 'size set' => 0];
+        foreach ((new ArrivalItem())->byArrival($arrivalId) as $item) {
+            if (empty($item['purchase_brand_id'])) $setupMissing['brand']++;
+            if (empty($item['purchase_category_id'])) $setupMissing['category']++;
+            if (empty($item['purchase_size_set_id'])) $setupMissing['size set']++;
+        }
+        foreach ($setupMissing as $field => $count) {
+            if ($count > 0) {
+                $reasons[] = "{$count} product line(s) still need a {$field}.";
+            }
         }
 
         return ['ok' => $reasons === [], 'reasons' => $reasons];
@@ -231,11 +252,12 @@ class GoodsArrival extends Model
      */
     private function createProductFromLine(array $item, ?int $userId): int
     {
-        $brandId = null;
-        $brandName = trim((string) ($item['brand_name'] ?? ''));
-        if ($brandName !== '') {
-            $brandId = (new Brand())->findOrCreate($brandName, 'imported') ?: null;
+        if (empty($item['purchase_brand_id']) || empty($item['purchase_category_id']) || empty($item['purchase_size_set_id'])) {
+            throw new \RuntimeException('A product cannot be created without a brand, category and size set.');
         }
+        $brandId = null;
+        $brandName = trim((string) ($item['mapped_brand_name'] ?? $item['brand_name'] ?? ''));
+        $brandId = (int) $item['purchase_brand_id'];
 
         $categoryId = $this->categoryIdForLine($item);
         $sizeSetId = $this->sizeSetIdForLine($item, $categoryId);
@@ -278,9 +300,10 @@ class GoodsArrival extends Model
             "SELECT id FROM products
               WHERE deleted_at IS NULL
                 AND REGEXP_REPLACE(LOWER(art_no), '[^a-z0-9]', '') = ?
+                AND brand_id = ?
                 AND category_id <=> ?
            ORDER BY id LIMIT 1",
-            [$artNo, $categoryId]
+            [$artNo, (int) $item['purchase_brand_id'], $categoryId]
         );
         return $row ? (int) $row['id'] : null;
     }

@@ -71,7 +71,7 @@ $init = json_encode([
       <!-- Brand (filtered by type + add-new) -->
       <div class="block">
         <span class="text-xs font-medium text-slate-500">Brand</span>
-        <select name="brand_id" x-model="brandId" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white">
+        <select name="brand_id" x-model="brandId" required class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white">
           <option value="">— Select —</option>
           <template x-for="b in filteredBrands()" :key="b.id">
             <option :value="String(b.id)" x-text="b.name"></option>
@@ -92,7 +92,7 @@ $init = json_encode([
       <!-- Category (add-new) -->
       <div class="block">
         <span class="text-xs font-medium text-slate-500">Category</span>
-        <select name="category_id" x-model="categoryId" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white">
+        <select name="category_id" x-model="categoryId" required class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white">
           <option value="">—</option>
           <?php foreach ($categories as $c): ?>
             <option value="<?= $c['id'] ?>"><?= e($c['name']) ?></option>
@@ -105,7 +105,7 @@ $init = json_encode([
       <!-- Size set (add-new + auto pairs) -->
       <div class="block">
         <span class="text-xs font-medium text-slate-500">Size set</span>
-        <select name="size_set_id" x-model="sizeSetId" @change="onSize" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white">
+        <select name="size_set_id" x-model="sizeSetId" @change="onSize" required class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white">
           <option value="">—</option>
           <?php foreach ($sizeSets as $s): ?>
             <option value="<?= $s['id'] ?>"><?= e(($s['category_name'] ? $s['category_name'].' ' : '').$s['label']) ?> (<?= (int)$s['default_pairs'] ?> pr)</option>

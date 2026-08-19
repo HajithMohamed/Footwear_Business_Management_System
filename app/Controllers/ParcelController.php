@@ -32,10 +32,21 @@ class ParcelController extends Controller
             $this->abort(404, 'Purchase not found.');
         }
 
+        $arrival = (new GoodsArrival())->byPurchase($purchaseId);
+        if (!$arrival) {
+            Session::flash('error', 'Start arrival verification before adding parcel weights.');
+            $this->redirect('purchases/' . $purchaseId);
+        }
+        if ((int) $arrival['inventory_updated'] === 1) {
+            Session::flash('error', 'This arrival is confirmed; parcel history is locked.');
+            $this->redirect('purchases/' . $purchaseId);
+        }
+
         $input  = $request->all();
-        $weight = (float) ($input['weight_kg'] ?? 0);
+        $weight = (float) ($input['parcel_weight_kg'] ?? $input['weight_kg'] ?? 0);
         if ($weight <= 0) {
-            $this->withErrors(['weight_kg' => ['Enter the parcel weight.']], $input);
+            Session::flash('error', 'Enter the actual parcel weight.');
+            $this->redirect('purchases/' . $purchaseId . '/arrival');
         }
 
         $received = (string) ($input['status'] ?? 'received') === 'received';
@@ -47,7 +58,10 @@ class ParcelController extends Controller
             'assignment_id'     => ((int) ($input['assignment_id'] ?? 0)) ?: null,
             'parcel_number'     => $parcelNumber,
             'weight_kg'         => $weight,
-            'arrived_weight_kg' => !empty($input['arrived_weight_kg']) ? (float) $input['arrived_weight_kg'] : null,
+            // The client supplies only the shipment total. Individual weights
+            // are measured here during verification, so there is no separate
+            // "given" and "arrived" value for a parcel.
+            'arrived_weight_kg' => $weight,
             'carton_count'      => max(1, (int) ($input['carton_count'] ?? 1)),
             'arrival_date'      => $received ? $this->dateOrToday($input['arrival_date'] ?? '') : null,
             'status'            => $received ? 'received' : 'expected',
@@ -58,10 +72,7 @@ class ParcelController extends Controller
             $this->purchases->advanceStatus($purchaseId, 'arrived');
         }
 
-        $arrival = (new GoodsArrival())->byPurchase($purchaseId);
-        if ($arrival) {
-            (new GoodsArrival())->syncParcelTotals((int) $arrival['id']);
-        }
+        (new GoodsArrival())->syncParcelTotals((int) $arrival['id']);
 
         // Handle weight photo. A parcel photo is a normal purchase document;
         // validate and store the uploaded file, never request values from it.
@@ -107,7 +118,10 @@ class ParcelController extends Controller
             Session::flash('success', 'Parcel logged.');
         }
 
-        $this->redirect('purchases/' . $purchaseId);
+        $returnTo = (string) ($input['return_to'] ?? '');
+        $this->redirect($returnTo === 'arrival'
+            ? 'purchases/' . $purchaseId . '/arrival'
+            : 'purchases/' . $purchaseId);
     }
 
     /** Mark a logged parcel as received (or damaged / missing). */

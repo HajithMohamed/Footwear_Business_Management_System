@@ -8,9 +8,13 @@ use App\Core\Request;
 use App\Core\Session;
 use App\Models\ArrivalCount;
 use App\Models\ArrivalItem;
+use App\Models\Brand;
+use App\Models\Category;
 use App\Models\GoodsArrival;
 use App\Models\Parcel;
 use App\Models\Purchase;
+use App\Models\PurchaseItem;
+use App\Models\SizeSet;
 
 /**
  * Goods arrival verification.
@@ -79,6 +83,7 @@ class ArrivalController extends Controller
 
         $items = $this->items->byArrival($arrivalId);
         $groupedItems = $this->groupItems($items);
+        $parcels = (new Parcel())->summary($purchaseId);
 
         $this->view('arrivals/verify', [
             'title'        => 'Verify Arrival — ' . $purchase['purchase_number'],
@@ -88,10 +93,114 @@ class ArrivalController extends Controller
             'items'        => $items,
             'counts'       => (new ArrivalCount())->byArrivalGrouped($arrivalId),
             'totals'       => $this->items->totals($arrivalId),
-            'parcels'      => (new Parcel())->summary($purchaseId),
+            'parcels'      => $parcels,
             'gate'         => $this->arrivals->canConfirm($arrivalId),
-            'summary'      => $this->buildSummary($purchase, $arrival, $groupedItems),
+            'summary'      => $this->buildSummary($purchase, $arrival, $groupedItems, $parcels),
+            'brands'       => (new Brand())->active(),
+            'categories'   => (new Category())->active(),
+            'sizeSets'     => (new SizeSet())->active(),
         ]);
+    }
+
+    /** Correct the one client-supplied shipment weight, including old zero-weight records. */
+    public function saveWeight(Request $request, array $params): void
+    {
+        [$purchaseId, $arrival] = $this->resolve($params);
+        $weight = max(0, (float) $request->input('total_weight_kg', 0));
+        if ($weight <= 0) {
+            Session::flash('error', 'Enter the total shipment weight supplied by the client.');
+            $this->redirect('purchases/' . $purchaseId . '/arrival');
+        }
+
+        $this->purchases->update($purchaseId, ['total_weight_kg' => $weight]);
+        $this->arrivals->update((int) $arrival['id'], ['weight_expected_kg' => $weight]);
+        Session::flash('success', 'Total shipment weight saved.');
+        $this->redirect('purchases/' . $purchaseId . '/arrival');
+    }
+
+    /** Resolve required catalogue data before an arrival may create inventory. */
+    public function updateProductDetails(Request $request, array $params): void
+    {
+        [$purchaseId] = $this->resolve($params);
+        $purchaseItemId = (int) ($params['itemId'] ?? 0);
+        $purchaseItem = (new PurchaseItem())->find($purchaseItemId);
+        if (!$purchaseItem || (int) $purchaseItem['purchase_id'] !== $purchaseId) {
+            $this->abort(404, 'Purchase product line not found.');
+        }
+
+        $brandId = ctype_digit((string) $request->input('brand_id', ''))
+            ? (int) $request->input('brand_id') : 0;
+        if ($brandId === 0) {
+            $brandId = (new Brand())->findOrCreate(trim((string) $request->input('new_brand', '')), 'imported');
+        }
+        $brand = $brandId > 0 ? (new Brand())->find($brandId) : null;
+        if (!$brand) {
+            Session::flash('error', 'Choose a brand or add the missing brand.');
+            $this->redirect('purchases/' . $purchaseId . '/arrival');
+        }
+
+        $categoryId = ctype_digit((string) $request->input('category_id', ''))
+            ? (int) $request->input('category_id') : 0;
+        if ($categoryId === 0) {
+            $categoryId = (new Category())->findOrCreate(trim((string) $request->input('new_category', '')));
+        }
+
+        $sizeSetId = ctype_digit((string) $request->input('size_set_id', ''))
+            ? (int) $request->input('size_set_id') : 0;
+        $sizeSet = $sizeSetId > 0 ? (new SizeSet())->find($sizeSetId) : null;
+        if ($sizeSet && !empty($sizeSet['category_id'])) {
+            $categoryId = (int) $sizeSet['category_id'];
+        }
+        if ($sizeSetId === 0) {
+            $newLabel = trim((string) $request->input('new_size_set', ''));
+            $newPairs = max(0, (int) $request->input('new_pairs_per_set', 0));
+            if ($categoryId > 0 && $newLabel !== '') {
+                $sizeSetId = (new SizeSet())->findOrCreate($newLabel, $categoryId, $newPairs ?: null);
+                $sizeSet = (new SizeSet())->find($sizeSetId);
+            }
+        }
+
+        if ($categoryId <= 0 || !$sizeSet) {
+            Session::flash('error', 'Choose or add both the category and size set.');
+            $this->redirect('purchases/' . $purchaseId . '/arrival');
+        }
+
+        (new PurchaseItem())->update($purchaseItemId, [
+            'brand_id'       => $brandId,
+            'brand_name'     => $brand['name'],
+            'category_id'    => $categoryId,
+            'size_set_id'    => $sizeSetId,
+            'size_set_label' => $sizeSet['label'],
+            'pairs_per_set'  => (int) $sizeSet['default_pairs'],
+        ]);
+        (new PurchaseItem())->autoMatchProducts($purchaseId);
+
+        Session::flash('success', 'Product setup saved.');
+        $this->redirect('purchases/' . $purchaseId . '/arrival');
+    }
+
+    /** Convenience for single-brand invoices: fill every unresolved line once. */
+    public function applyBrand(Request $request, array $params): void
+    {
+        [$purchaseId] = $this->resolve($params);
+        $brandId = ctype_digit((string) $request->input('brand_id', ''))
+            ? (int) $request->input('brand_id') : 0;
+        if ($brandId === 0) {
+            $brandId = (new Brand())->findOrCreate(trim((string) $request->input('new_brand', '')), 'imported');
+        }
+        $brand = $brandId > 0 ? (new Brand())->find($brandId) : null;
+        if (!$brand) {
+            Session::flash('error', 'Choose a brand or enter a new brand name.');
+            $this->redirect('purchases/' . $purchaseId . '/arrival');
+        }
+
+        \App\Core\Database::instance()->query(
+            'UPDATE purchase_items SET brand_id = ?, brand_name = ? WHERE purchase_id = ? AND brand_id IS NULL',
+            [$brandId, $brand['name'], $purchaseId]
+        );
+        (new PurchaseItem())->autoMatchProducts($purchaseId);
+        Session::flash('success', 'Brand applied to every product line that was missing one.');
+        $this->redirect('purchases/' . $purchaseId . '/arrival');
     }
 
     /** Final count: one received quantity per line, entered in one pass. */
@@ -235,7 +344,7 @@ class ArrivalController extends Controller
                     'group_key'      => $key,
                     'art_no'         => trim((string) ($item['art_no'] ?? '')) ?: 'Unnamed',
                     'category_name'  => trim((string) ($item['category_name'] ?? '')) ?: 'General',
-                    'brand_name'     => $item['brand_name'] ?? 'Other',
+                    'brand_name'     => $item['mapped_brand_name'] ?? $item['brand_name'] ?? '',
                     'product_thumb'  => $item['product_thumb'],
                     'expected_pairs' => 0,
                     'received_pairs' => 0,

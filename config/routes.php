@@ -112,6 +112,9 @@ return function (Router $r): void {
     $r->get('/purchases/{id}/arrival',          'ArrivalController@verify',        ['auth']);
     $r->post('/purchases/{id}/arrival/counts',  'ArrivalController@saveCounts',    ['auth']);
     $r->post('/purchases/{id}/arrival/count',   'ArrivalController@addCount',      ['auth']);
+    $r->post('/purchases/{id}/arrival/weight',  'ArrivalController@saveWeight',    ['auth']);
+    $r->post('/purchases/{id}/arrival/brand',   'ArrivalController@applyBrand',    ['auth']);
+    $r->post('/purchases/{id}/arrival/items/{itemId}', 'ArrivalController@updateProductDetails', ['auth']);
     $r->post('/purchases/{id}/arrival/partial', 'ArrivalController@acceptPartial', ['auth']);
     $r->post('/purchases/{id}/arrival/confirm', 'ArrivalController@confirm',       ['auth']);
 

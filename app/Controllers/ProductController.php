@@ -276,11 +276,11 @@ class ProductController extends Controller
         $type = $data['type'] ?? 'imported';
         $rules = [
             'type'                => 'required|in:imported,local,custom',
-            'brand_id'            => 'nullable|integer',
+            'brand_id'            => 'required|integer',
             'art_no'              => 'nullable|string|max:60',
             'name'                => 'nullable|string|max:150',
-            'category_id'         => 'nullable|integer',
-            'size_set_id'         => 'nullable|integer',
+            'category_id'         => 'required|integer',
+            'size_set_id'         => 'required|integer',
             'pairs_in_set'        => 'nullable|integer|min:0',
             'set_weight_grams'    => 'nullable|integer|min:0',
             'wholesale_price'     => 'nullable|numeric|min:0',

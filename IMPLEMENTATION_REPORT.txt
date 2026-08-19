@@ -46,6 +46,11 @@ Implemented product functionality:
 - OCR never invents a brand, derives pairs-per-set as a scanned product value, or
   stores the supplier rate/line amount as product data. If no explicit MRP is
   printed, Indian MRP remains blank for manual confirmation.
+- Brand is now mandatory before any product can be created. Product and purchase
+  entry use saved-brand dropdowns with an explicit Add new brand option.
+- Category and size set are also mandatory product references. Missing categories
+  and new size sets can be added to the database from purchase entry or arrival
+  verification, including the new size set's pairs-per-set value.
 
 Variant grouping implemented:
 - Existing database rows sharing the same Art Number and Category are presented
@@ -176,6 +181,11 @@ Simplified purchase entry:
   arrival verification.
 - One supplier invoice is scanned at a time, while the same clearance person can
   be assigned multiple purchases/invoices, each retained separately.
+- Every purchase detail page now has Add another bill for the same supplier and
+  a supplier-bill history card. The supplier name is preserved through scanned
+  and manual additional-bill entry.
+- Purchase entry asks for one client-supplied total shipment weight and no longer
+  asks the client for a parcel count.
 
 Purchase lifecycle:
 - Draft -> Ordered -> Assigned -> In Transit -> Arrived -> Verification Pending
@@ -233,6 +243,20 @@ Arrival verification:
   partial receipt and parcel/weight reconciliation.
 - Final confirmation updates products/stock in a transaction and locks the
   inventory history against retrospective edits.
+- Fixed the ArrivalController::buildSummary runtime error by passing the parcel
+  summary required by its fourth argument.
+- Rebuilt the mobile verification interface into four ordered steps: shipment
+  weight, parcel weights, product setup/counting, and inventory confirmation.
+- Each actual parcel weight is entered only during verification. The system
+  displays the automatic parcel total and difference from the client's total.
+- Inventory confirmation is blocked until at least one parcel is weighed, every
+  quantity is counted, and every product line has a saved brand, category and
+  size set.
+- A bulk brand action handles single-brand invoices, while per-line setup supports
+  mixed brands and adding missing reference records.
+- Removed an ambiguous fuzzy size-label join that could duplicate an arrival row
+  when two categories shared a size label. Explicit size-set IDs are now used;
+  the 16-line CASH-525 invoice displays exactly 16 arrival lines and 196 pairs.
 
 Landed costing:
 - Discounted supplier amount and exchange conversion.
@@ -360,6 +384,12 @@ Live browser verification against the Docker application:
 - Clearance person with three invoices verified as three separate detailed and
   WhatsApp-shareable summaries.
 - Fixed mobile footer/sticky action layout verified at a 390 x 844 viewport.
+- Exact failing purchase PUR-2026-000005 opened successfully at 390 x 844 with
+  no buildSummary exception, no application JavaScript errors, the four-step
+  arrival UI, client/parcel weight comparison, mandatory catalogue setup, and
+  the 16-line/196-pair total.
+- Add another bill was followed from the purchase page and verified to preserve
+  MAHASHAKTI TRADE CENTRE in both scan and manual-entry paths.
 - Completed purchase status and landed-cost next action.
 - No application JavaScript errors were found in the checked workflows.
 
