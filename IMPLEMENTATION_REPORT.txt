@@ -1,0 +1,203 @@
+SHOE BANK - IMPLEMENTATION REPORT
+Generated: 16 August 2026
+
+1. PROJECT OVERVIEW
+-------------------
+Shoe Bank is a PHP 8.1+, MySQL/MariaDB mobile-first footwear wholesale
+management system. It uses a lightweight custom MVC structure, Tailwind CSS
+through CDN, Alpine.js, local file storage, session authentication, CSRF
+protection, and role-based permissions. It is designed for cheap shared/cPanel
+hosting without React, Laravel, or a Node build process.
+
+2. IMPLEMENTED BUSINESS MODULES
+-------------------------------
+
+Authentication and access
+- Session login/logout.
+- Guest, authenticated-user, and administrator middleware.
+- CSRF tokens on POST forms.
+- Admin-only protection for sensitive destructive actions such as product,
+  customer, and draft-purchase deletion.
+
+Dashboard and navigation
+- Mobile-oriented Home, Products, Customers, Finance, and More navigation.
+- Floating quick-action menu for invoices, customers, products, and purchases.
+- Dashboard cards and alerts for financial status, overdue customers, cheques,
+  imports, arrivals, and stock conditions.
+
+Products and inventory
+- Imported, local, and custom products.
+- Brands, categories, size sets, colours, Art Numbers, product images, selling
+  prices, stock, and stock history.
+- Product search and stock adjustment.
+- Product image upload, validation, thumbnails, and safe local file storage.
+- Local products do not use Indian landed-cost calculations.
+
+Indian landed-cost calculation
+- Shared server-side CostCalculator service.
+- Discounted INR amount, LKR exchange conversion, Rs.25 rounding, weight per
+  pair, pairs per kilogram, clearance cost per pair, handling charge, final
+  landed cost, and suggested selling price.
+- Cost calculations are kept on the backend rather than duplicated in browser
+  JavaScript.
+- Historical sale-item cost is snapshotted at the time of sale, so later
+  re-costing does not change old profitability.
+
+Customers, credit and ledger
+- Customer create, update, soft delete, and restore.
+- Customer search and mobile-friendly filtering.
+- Customer detail dashboard with outstanding balance, ledger, bills, payments,
+  invoices, cheques, and intelligence information.
+- Manual historic/credit bills with a separately stored bill date.
+- Append-only customer ledger transactions and running balance.
+- Configurable default customer credit period.
+- Customer intelligence based on actual purchase and payment history:
+  reliable/good, slow/late, defaulter/risk, overdue, frequent, and inactive
+  indicators.
+
+Payments and cheques
+- Cash, bank-transfer, cheque, and card payment recording.
+- Partial payment support.
+- Payment date stored separately from bill/invoice date.
+- Customer payment, ledger entry, and outstanding-balance update are now
+  executed inside one database transaction.
+- Customer row locking prevents simultaneous submissions from using the same
+  outstanding balance.
+- Overpayments are rejected instead of silently creating inconsistent history.
+- Cheque records support number, bank, amount, cheque date, deposit date,
+  status, image, notes, and bounce reason.
+- Cheque flow: Pending -> Deposited -> Cleared or Bounced; cancellation is
+  allowed while pending.
+- Deposited and pending cheques remain receivables. Only cleared cheques are
+  counted as actual cash received.
+- Bounce creates a ledger adjustment that restores the customer outstanding
+  balance exactly once.
+- Cheque reminders and dashboard/list warnings for cheques due for banking.
+- New database migration: database/migrations/005_cheque_deposited_status.sql
+  adds the deposited cheque status to existing installations.
+
+Sales and finance
+- Wholesale/retail sales, cash/credit sales, invoice lines, and stock deduction.
+- Credit sales create customer ledger debt; cash sales record counter payment.
+- Sales are transactional across invoice, line items, stock movement, and
+  customer ledger changes.
+- Sale cancellation restores stock while retaining invoice history.
+- Expenses are separate from inventory purchases.
+- Finance views distinguish revenue/profit from cash collection/receivables.
+- Profit calculations use sales revenue, snapshotted COGS, clearance costs, and
+  operating expenses.
+- Reports include stock, imports, clearance, costs, and receivables.
+
+Import purchase, clearance, parcel, and arrival workflow
+- Purchase entry via manual entry, scanned image, PDF, handwritten invoice, or
+  an editable OCR/extraction result.
+- OCR/extraction never creates inventory automatically; the owner reviews and
+  confirms all extracted data first.
+- Purchase line items include brand, Art Number, colour, size set, pairs per
+  set, quantity, INR price, and totals.
+- Existing products are matched using Art Number, brand, and colour to avoid
+  accidental variant collisions.
+- Many-to-many Purchase <-> Clearance Person assignments.
+- Each clearance assignment stores assigned weight, parcel count, rate per kg,
+  calculated clearance cost, date, status, and notes.
+- Shipment weight reconciliation compares total shipment weight with allocated
+  clearance weight.
+- A shipment cannot be marked In Transit without a clearance assignment.
+- Parcels support expected/received/damaged/missing states, weights, carton
+  counts, arrival date, notes, responsible clearance assignment, and photo
+  evidence.
+- Parcel photo uploads are validated and stored correctly as purchase
+  attachments. This corrected a previous runtime-breaking storage-method call.
+- Existing parcel records can be updated from the purchase screen until the
+  arrival is confirmed.
+- Purchase edit/update is available before arrival; it safely replaces invoice
+  lines and re-runs product matching in one transaction.
+- Draft purchases can be deleted by an administrator. Dispatch/arrival history
+  is deliberately retained and cannot be deleted.
+- Arrival verification has final-count and incremental-count modes.
+- Incremental counts create count history and the received total is calculated
+  automatically.
+- Inventory is not increased when a purchase is created, assigned, in transit,
+  or merely arrived.
+- Inventory increases only after verification confirmation, inside a database
+  transaction, and creates stock-history records.
+- Confirmed arrivals lock parcel history so the audit trail and inventory cannot
+  be changed retrospectively.
+- Arrival verification supports matched, shortage, excess, partial receipt,
+  parcel/weight reconciliation, and final confirmation.
+- Landed costing is available after arrival confirmation.
+
+Attachments and uploads
+- Supplier invoices, handwritten notes, clearance documents, delivery receipts,
+  parcel proof, calculation notes, and other documents.
+- File MIME/type and size validation.
+- Safe generated filenames, protected upload location, and image thumbnails.
+- Standalone calculation notes can later be attached to a purchase.
+
+Settings and supporting operations
+- Configurable business/cost/credit/reminder settings.
+- Customer-intelligence recomputation.
+- Overdue reminder scripts/cron entry points.
+- Storage/log/backups folder structure.
+
+3. RECENT IMPROVEMENTS MADE IN THIS WORK SESSION
+------------------------------------------------
+1. Payment integrity
+   - Converted customer payment creation into an atomic transaction.
+   - Added balance locking and overpayment validation.
+   - Added cheque deposit-date persistence and validation.
+
+2. Cheque lifecycle
+   - Added Deposited as an explicit status in code, UI, schema, summaries, and
+     reminder queries.
+   - Added safe status-transition rules.
+   - Added migration 005 for existing databases.
+
+3. Purchase and verification workflow
+   - Corrected parcel-photo upload implementation.
+   - Added controlled purchase update/edit support before arrival.
+   - Added safe draft purchase deletion.
+   - Added in-place parcel status updates.
+   - Prevented parcel changes after inventory confirmation.
+   - Prevented in-transit status without a clearance assignment.
+   - Added mobile action links for purchase edit/delete and parcel updates.
+
+4. VERIFICATION COMPLETED
+-------------------------
+- php tests/run.php completed successfully.
+- Result: 45 passed, 0 failed.
+- CostCalculator tests passed.
+- CustomerIntelligence tests passed.
+- PHP syntax checks passed for changed controllers, models, views, and routes.
+- git diff --check completed without whitespace errors.
+
+5. DATABASE ACTION REQUIRED FOR EXISTING INSTALLATIONS
+------------------------------------------------------
+Run the following migration once after deploying these changes:
+
+database/migrations/005_cheque_deposited_status.sql
+
+This changes the cheques.status ENUM to include 'deposited'. A fresh database
+created from database/schema.sql already includes this value.
+
+6. INTENTIONAL SAFETY RULES
+---------------------------
+- Imported goods cannot be sold from this workflow until arrival verification
+  has confirmed inventory.
+- Confirmed inventory and parcel history are not silently rewritten.
+- Only draft purchases may be deleted; other purchases remain as business
+  history.
+- Pending/deposited cheques are not cash collection.
+- Old sale profit is not changed by later product re-costing.
+- Local products do not receive Indian import cost treatment.
+
+7. SUGGESTED NEXT QA STEPS
+--------------------------
+- Run the full application with Docker/MySQL and test the complete mobile flow:
+  create purchase -> assign clearance -> mark in transit -> log parcels ->
+  start verification -> count -> confirm inventory -> cost shipment.
+- Test PDF/image uploads with a real phone camera photo.
+- Test a two-agent split clearance assignment and an accepted partial arrival.
+- Test cheque pending -> deposited -> cleared and deposited -> bounced flows.
+- Review all screens on a small mobile device after sample data is loaded.
+

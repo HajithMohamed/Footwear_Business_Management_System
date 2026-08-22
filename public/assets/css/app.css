@@ -1,0 +1,16 @@
+/* Small custom layer on top of Tailwind (loaded via CDN). */
+:root { -webkit-tap-highlight-color: transparent; }
+
+html { scroll-behavior: smooth; }
+body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+
+/* Respect the iOS safe area for the fixed bottom nav. */
+nav.fixed.bottom-0 { padding-bottom: env(safe-area-inset-bottom); }
+
+/* Hide number-input spinners for a cleaner mobile look. */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; }
+
+/* Prevent iOS zoom-on-focus (inputs already use >=15px). */
+select, input, textarea { font-size: 15px; }

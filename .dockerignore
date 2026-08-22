@@ -1,0 +1,15 @@
+# Keep the build context small and never bake secrets/local state into the image
+.git
+.gitattributes
+.env
+storage/logs/*
+storage/backups/*
+public/uploads/*
+!public/uploads/.htaccess
+!public/uploads/.gitkeep
+*.vsix
+node_modules
+.idea
+.vscode
+README.md
+MASTER_PROMPT.md

@@ -1,0 +1,19 @@
+# Uploaded files are DATA, never code. Block any script execution here.
+php_flag engine off
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+</IfModule>
+
+# Disable handlers that could execute uploaded files
+<FilesMatch "\.(php|php\d|phtml|phar|pl|py|cgi|asp|sh|htaccess)$">
+    Require all denied
+</FilesMatch>
+
+# Only allow images and PDFs to be served
+<FilesMatch "\.(jpg|jpeg|png|webp|gif|pdf)$">
+    Require all granted
+</FilesMatch>
+
+Options -Indexes -ExecCGI
+AddType text/plain .php .phtml .phar
