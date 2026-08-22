@@ -141,6 +141,19 @@ $statusTone = [
     <?php endif; ?>
   </section>
 
+  <?php if ($weightDifference < -0.01 || (int) $summary['received_pairs'] < (int) $summary['expected_pairs']): ?>
+    <section class="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+      <p class="text-sm font-bold text-amber-900">Missing goods follow-up</p>
+      <p class="mt-1 text-xs leading-5 text-amber-800">Current receipt: <?= number_format($parcelWeight, 2) ?> of <?= number_format($clientWeight, 2) ?> kg. Missing pairs: <?= max(0, (int) $summary['expected_pairs'] - (int) $summary['received_pairs']) ?>. Clearance payment uses received parcel weight only.</p>
+      <form method="post" action="<?= e(url('purchases/' . $purchase['id'] . '/arrival/partial')) ?>" class="mt-3 space-y-2">
+        <?= csrf_field() ?>
+        <input type="hidden" name="follow_up_shipment" value="1">
+        <input name="remarks" placeholder="Optional follow-up note" class="w-full rounded-xl bg-white px-3 py-2 text-sm ring-1 ring-amber-200">
+        <button class="w-full rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-bold text-white">Accept current goods and mark missing goods for later shipment</button>
+      </form>
+    </section>
+  <?php endif; ?>
+
   <section class="rounded-2xl bg-white p-4 shadow-sm ring-1 <?= $gate['ok'] ? 'ring-green-200' : 'ring-amber-200' ?>">
     <p class="text-sm font-bold text-slate-800">4. Confirm inventory</p><p class="mt-1 text-xs leading-5 text-slate-500">This is the only action that creates products and adds verified stock.</p>
     <?php if ($gate['ok']): ?><form method="post" action="<?= e(url('purchases/' . $purchase['id'] . '/arrival/confirm')) ?>" class="mt-3" onsubmit="return confirm('Create/update products and add the verified stock to inventory?')"><?= csrf_field() ?><button class="w-full rounded-xl bg-green-600 px-4 py-3 text-sm font-bold text-white">Confirm and update inventory</button></form><?php else: ?><div class="mt-3 space-y-2"><?php foreach ($gate['reasons'] as $reason): ?><p class="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800"><?= e($reason) ?></p><?php endforeach; ?></div><button disabled class="mt-3 w-full rounded-xl bg-slate-200 px-4 py-3 text-sm font-bold text-slate-400">Complete the steps above first</button><?php endif; ?>

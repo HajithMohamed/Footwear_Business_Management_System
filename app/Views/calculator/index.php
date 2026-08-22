@@ -46,6 +46,7 @@
     <div class="rounded-2xl bg-brand-600 text-white p-5 shadow-lg shadow-brand-600/20">
       <p class="text-xs font-medium text-white/60">Final landed cost / pair</p>
       <p class="mt-1 text-4xl font-extrabold" x-text="money(r.final_cost)">—</p>
+      <p class="mt-1 text-sm font-semibold tracking-[0.18em] text-brand-100">Cost code: <span x-text="r.final_cost_code || '—'"></span></p>
 
       <div class="mt-4 space-y-1.5 text-sm">
         <div class="flex justify-between"><span class="text-white/70">Discounted price (₹)</span><span x-text="num(r.discounted_price)"></span></div>
@@ -71,6 +72,7 @@
       </div>
     </div>
   </div>
+  <p class="mt-4 text-xs text-slate-500">Cost code: F=1, I=2, S=3, H=4, G=5, O=6, L=7, D=8, E=9. Zero alternates as N/X for each zero: 1000 = FNXN; 1050 = FNGX.</p>
 </div>
 
 <script>

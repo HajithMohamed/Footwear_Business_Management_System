@@ -7,6 +7,7 @@ use App\Core\Controller;
 use App\Core\Request;
 use App\Core\Session;
 use App\Models\Purchase;
+use App\Models\PurchaseClearanceAssignment;
 use App\Services\PurchaseCosting;
 
 /**
@@ -107,7 +108,7 @@ class CostingController extends Controller
             }
         }
 
-        $this->redirect('purchases/' . $purchaseId . '/costing');
+        $this->redirect('purchases/' . $purchaseId);
     }
 
     private function render(int $purchaseId, array $lineInput, array $rateOverrides): void
@@ -130,6 +131,7 @@ class CostingController extends Controller
             'lines'     => $lines,
             'rates'     => $this->costing->rates($purchase, $rateOverrides),
             'agentWage' => $this->costing->agentWage($purchaseId),
+            'assignments' => (new PurchaseClearanceAssignment())->byPurchase($purchaseId),
             'summary'   => $this->summarise($lines),
         ]);
     }

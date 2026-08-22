@@ -135,9 +135,16 @@ class ClearancePersonController extends Controller
             Session::flash('error', 'Choose a valid payment status.');
             $this->redirect('clearance-persons/' . $personId);
         }
+        $payable = $assignments->syncPaymentToReceivedWeight($assignmentId);
+        if ($status === 'paid' && $payable['weight'] <= 0) {
+            Session::flash('error', 'Add the received parcel weight before marking this clearance payment as paid.');
+            $this->redirect('clearance-persons/' . $personId);
+        }
         $assignments->setPaymentStatus($assignmentId, $status);
         $this->log('clearance_payment.update', 'clearance_assignment', $assignmentId, ['status' => $status]);
-        Session::flash('success', $status === 'paid' ? 'Clearance payment marked as paid.' : 'Clearance payment marked as pending.');
+        Session::flash('success', $status === 'paid'
+            ? 'Clearance payment marked as paid for the received parcel weight.'
+            : 'Clearance payment marked as pending.');
         $this->redirect('clearance-persons/' . $personId);
     }
 
