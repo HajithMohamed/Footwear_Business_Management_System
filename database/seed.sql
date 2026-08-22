@@ -97,15 +97,15 @@ ON DUPLICATE KEY UPDATE sort_order = VALUES(sort_order);
 
 -- Sample customers (retail + wholesale) ----------------------------------------
 INSERT INTO customers (name, phone, email, customer_type, credit_limit, notes, created_by) VALUES
-    ('Colombo Retail Store',    '0112356789', 'cmb@retail.lk',    'retail',    50000, 'Good payment history',    1),
-    ('Kandy Wholesale Hub',     '0812256789', 'kandy@wholesale.lk','wholesale', 200000, 'VIP wholesale partner',    1),
-    ('Galle City Mart',         '0912156789', 'galle@mart.lk',    'retail',    30000, 'New customer',             1),
-    ('Negombo Trading Co.',     '0312456789', 'negombo@trade.lk', 'wholesale', 150000, 'Reliable, 2yrs relation', 1),
-    ('Jaffna Shoes',            '0212356789', 'jaffna@shoes.lk',  'retail',    40000, 'Consistent orders',        1),
-    ('Matara Regional Store',   '0412156789', 'matara@store.lk',  'retail',    25000, 'Occasional buyer',         1),
-    ('Anuradhapura Distributor','0812456789', 'anura@dist.lk',    'wholesale', 180000, 'Strong regional presence', 1),
-    ('Kiribathgoda Shop',       '0112856789', 'kiri@shop.lk',     'retail',    35000, 'Active',                   1),
-    ('Kurunegala Retail Group', '0812356789', 'kuru@group.lk',    'wholesale', 120000, 'At-risk (slow payments)',   1)
+    ('Colombo Retail Store',    '+94112356789', 'cmb@retail.lk',    'retail',    50000, 'Good payment history',    1),
+    ('Kandy Wholesale Hub',     '+94812256789', 'kandy@wholesale.lk','wholesale', 200000, 'VIP wholesale partner',    1),
+    ('Galle City Mart',         '+94912156789', 'galle@mart.lk',    'retail',    30000, 'New customer',             1),
+    ('Negombo Trading Co.',     '+94312456789', 'negombo@trade.lk', 'wholesale', 150000, 'Reliable, 2yrs relation', 1),
+    ('Jaffna Shoes',            '+94212356789', 'jaffna@shoes.lk',  'retail',    40000, 'Consistent orders',        1),
+    ('Matara Regional Store',   '+94412156789', 'matara@store.lk',  'retail',    25000, 'Occasional buyer',         1),
+    ('Anuradhapura Distributor','+94812456789', 'anura@dist.lk',    'wholesale', 180000, 'Strong regional presence', 1),
+    ('Kiribathgoda Shop',       '+94112856789', 'kiri@shop.lk',     'retail',    35000, 'Active',                   1),
+    ('Kurunegala Retail Group', '+94812356789', 'kuru@group.lk',    'wholesale', 120000, 'At-risk (slow payments)',   1)
 ON DUPLICATE KEY UPDATE customer_type = VALUES(customer_type);
 
 -- Sample opening balances (ledger transactions) --------------------------------

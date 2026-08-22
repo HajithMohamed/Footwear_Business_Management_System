@@ -41,7 +41,10 @@ class SizeSet extends Model
         if ($label === '') {
             return 0;
         }
-        $existing = $this->db()->first('SELECT id FROM size_sets WHERE label = ? LIMIT 1', [$label]);
+        $existing = $this->db()->first(
+            'SELECT id FROM size_sets WHERE label = ? AND category_id <=> ? LIMIT 1',
+            [$label, $categoryId]
+        );
         if ($existing) {
             return (int) $existing['id'];
         }

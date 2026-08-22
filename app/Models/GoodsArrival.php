@@ -94,6 +94,10 @@ class GoodsArrival extends Model
             $reasons[] = 'Inventory has already been updated for this shipment.';
         }
 
+        if ((float) ($arrival['weight_expected_kg'] ?? 0) <= 0) {
+            $reasons[] = 'Save the client-supplied total shipment weight.';
+        }
+
         $expected = (int) $arrival['parcels_expected'];
         $received = (int) $arrival['parcels_received'];
         if ($expected > 0 && $received < $expected && (int) $arrival['partial_receipt'] !== 1) {
@@ -106,6 +110,23 @@ class GoodsArrival extends Model
             $reasons[] = 'This purchase has no invoice lines to verify.';
         } elseif ((int) ($totals['pending'] ?? 0) > 0) {
             $reasons[] = $totals['pending'] . ' product line(s) still need a received quantity.';
+        }
+
+        $parcelSummary = (new Parcel())->summary((int) $arrival['purchase_id']);
+        if ((int) $parcelSummary['received'] === 0) {
+            $reasons[] = 'Log each arrived parcel and its weight before confirming.';
+        }
+
+        $setupMissing = ['brand' => 0, 'category' => 0, 'size set' => 0];
+        foreach ((new ArrivalItem())->byArrival($arrivalId) as $item) {
+            if (empty($item['purchase_brand_id'])) $setupMissing['brand']++;
+            if (empty($item['purchase_category_id'])) $setupMissing['category']++;
+            if (empty($item['purchase_size_set_id'])) $setupMissing['size set']++;
+        }
+        foreach ($setupMissing as $field => $count) {
+            if ($count > 0) {
+                $reasons[] = "{$count} product line(s) still need a {$field}.";
+            }
         }
 
         return ['ok' => $reasons === [], 'reasons' => $reasons];
@@ -147,8 +168,13 @@ class GoodsArrival extends Model
                 $productId = $item['product_id'] ? (int) $item['product_id'] : null;
 
                 if ($productId === null) {
-                    $productId = $this->createProductFromLine($item, $userId);
-                    $productsCreated++;
+                    // A product is identified by Art Number + Category. Invoice
+                    // colours remain variants of that product, not duplicate stock cards.
+                    $productId = $this->findBaseProductFromLine($item);
+                    if ($productId === null) {
+                        $productId = $this->createProductFromLine($item, $userId);
+                        $productsCreated++;
+                    }
                     $this->db()->query(
                         'UPDATE arrival_items SET product_id = ? WHERE id = ?',
                         [$productId, $item['id']]
@@ -226,27 +252,32 @@ class GoodsArrival extends Model
      */
     private function createProductFromLine(array $item, ?int $userId): int
     {
-        $brandId = null;
-        $brandName = trim((string) ($item['brand_name'] ?? ''));
-        if ($brandName !== '') {
-            $brandId = (new Brand())->findOrCreate($brandName, 'imported') ?: null;
+        if (empty($item['purchase_brand_id']) || empty($item['purchase_category_id']) || empty($item['purchase_size_set_id'])) {
+            throw new \RuntimeException('A product cannot be created without a brand, category and size set.');
         }
+        $brandId = null;
+        $brandName = trim((string) ($item['mapped_brand_name'] ?? $item['brand_name'] ?? ''));
+        $brandId = (int) $item['purchase_brand_id'];
+
+        $categoryId = $this->categoryIdForLine($item);
+        $sizeSetId = $this->sizeSetIdForLine($item, $categoryId);
 
         $name = trim(implode(' ', array_filter([
             $brandName,
             $item['art_no'] ?? '',
-            $item['colour'] ?? '',
         ])));
 
         $this->db()->query(
             'INSERT INTO products
-                (type, brand_id, art_no, name, pairs_in_set, indian_price, stock_sets, notes, created_by)
-             VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)',
+                (type, brand_id, art_no, name, category_id, size_set_id, pairs_in_set, indian_price, stock_sets, notes, created_by)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)',
             [
                 'imported',
                 $brandId,
                 $item['art_no'] ?: null,
                 $name !== '' ? $name : ($item['art_no'] ?: 'Imported product'),
+                $categoryId,
+                $sizeSetId,
                 $item['pairs_per_set'] ?: null,
                 $item['unit_price'] ?: null,
                 'Created automatically from an import arrival.',
@@ -255,6 +286,51 @@ class GoodsArrival extends Model
         );
 
         return $this->db()->lastInsertId();
+    }
+
+    /** Find a product already created for this Art Number + Category. */
+    private function findBaseProductFromLine(array $item): ?int
+    {
+        $artNo = strtolower(preg_replace('/[^a-z0-9]/i', '', trim((string) ($item['art_no'] ?? ''))));
+        if ($artNo === '') {
+            return null;
+        }
+        $categoryId = $this->categoryIdForLine($item);
+        $row = $this->db()->first(
+            "SELECT id FROM products
+              WHERE deleted_at IS NULL
+                AND REGEXP_REPLACE(LOWER(art_no), '[^a-z0-9]', '') = ?
+                AND brand_id = ?
+                AND category_id <=> ?
+           ORDER BY id LIMIT 1",
+            [$artNo, (int) $item['purchase_brand_id'], $categoryId]
+        );
+        return $row ? (int) $row['id'] : null;
+    }
+
+    private function categoryIdForLine(array $item): ?int
+    {
+        if (!empty($item['purchase_category_id'])) {
+            return (int) $item['purchase_category_id'];
+        }
+        $name = trim((string) ($item['category_name'] ?? ''));
+        return $name !== '' ? ((new Category())->findOrCreate($name) ?: null) : null;
+    }
+
+    private function sizeSetIdForLine(array $item, ?int $categoryId): ?int
+    {
+        if (!empty($item['purchase_size_set_id'])) {
+            return (int) $item['purchase_size_set_id'];
+        }
+        $label = trim((string) ($item['size_set_label'] ?? ''));
+        if ($label === '') {
+            return null;
+        }
+        $row = $this->db()->first(
+            'SELECT id FROM size_sets WHERE label = ? AND category_id <=> ? ORDER BY id LIMIT 1',
+            [$label, $categoryId]
+        );
+        return $row ? (int) $row['id'] : null;
     }
 
     /** Shipments arrived but not yet fully counted — dashboard widget. */

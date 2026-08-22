@@ -17,7 +17,7 @@ $badge = [
     <h1 class="text-lg font-bold text-slate-800">Purchases</h1>
     <p class="text-sm text-slate-500"><?= (int) ($stats['total'] ?? 0) ?> shipment<?= (int) ($stats['total'] ?? 0) === 1 ? '' : 's' ?></p>
   </div>
-  <a href="<?= e(url('purchases/import')) ?>" class="rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm active:scale-[.99]">+ New</a>
+  <a href="<?= e(url('purchases/import')) ?>" class="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm active:scale-[.99]"><?= ui_icon('plus', 'h-4 w-4') ?> New</a>
 </div>
 
 <!-- Weight at a glance -->
@@ -37,16 +37,15 @@ $badge = [
 </div>
 
 <!-- Filters -->
-<form method="get" class="mb-4 flex gap-2">
+<form method="get" class="mb-4 flex gap-2" x-data>
   <input type="search" name="search" value="<?= e($filters['search']) ?>" placeholder="Purchase no, supplier, invoice no"
-         class="flex-1 rounded-xl border-slate-200 bg-white px-3 py-2 text-sm shadow-sm ring-1 ring-slate-100">
-  <select name="status" class="rounded-xl border-slate-200 bg-white px-3 py-2 text-sm shadow-sm ring-1 ring-slate-100">
+         @input.debounce.500ms="$el.form.submit()" class="flex-1 rounded-xl border-slate-200 bg-white px-3 py-2 text-sm shadow-sm ring-1 ring-slate-100">
+  <select name="status" @change="$el.form.submit()" class="rounded-xl border-slate-200 bg-white px-3 py-2 text-sm shadow-sm ring-1 ring-slate-100">
     <option value="">All</option>
     <?php foreach (Purchase::STATUS_LABELS as $key => $label): ?>
       <option value="<?= e($key) ?>" <?= $filters['status'] === $key ? 'selected' : '' ?>><?= e($label) ?></option>
     <?php endforeach; ?>
   </select>
-  <button class="rounded-xl bg-slate-700 px-4 py-2 text-sm font-medium text-white">Go</button>
 </form>
 
 <div class="space-y-3">
@@ -83,12 +82,12 @@ $badge = [
       </div>
 
       <?php if ($p['clearance_names']): ?>
-        <p class="mt-2 text-xs text-slate-500">🚚 <?= e($p['clearance_names']) ?></p>
+        <p class="mt-2 flex items-center gap-1.5 text-xs text-slate-500"><?= ui_icon('truck', 'h-4 w-4') ?> <?= e($p['clearance_names']) ?></p>
       <?php endif; ?>
 
       <?php if ($total > 0 && !$balanced && $p['status'] !== 'draft'): ?>
         <p class="mt-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-700">
-          ⚠ <?= number_format($assigned, 2) ?> kg assigned of <?= number_format($total, 2) ?> kg
+          <?= ui_icon('warning', 'mr-1 inline h-4 w-4') ?> <?= number_format($assigned, 2) ?> kg assigned of <?= number_format($total, 2) ?> kg
         </p>
       <?php endif; ?>
     </a>
@@ -96,7 +95,7 @@ $badge = [
 
   <?php if (!$purchases): ?>
     <div class="rounded-2xl bg-white p-8 text-center shadow-sm ring-1 ring-slate-100">
-      <div class="text-3xl">📦</div>
+      <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400"><?= ui_icon('box', 'h-7 w-7') ?></div>
       <p class="mt-2 text-sm text-slate-500">No purchases yet.</p>
       <a href="<?= e(url('purchases/import')) ?>" class="mt-3 inline-block rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white">Import an invoice</a>
     </div>

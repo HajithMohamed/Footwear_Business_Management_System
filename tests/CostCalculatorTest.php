@@ -2,15 +2,17 @@
 
 use App\Services\CostCalculator;
 
-// --- round_to_step (round-half-up to nearest 25) ---------------------------
-eq(700, CostCalculator::roundToStep(712), 'roundToStep 712 → 700');
+// --- round_to_step (round UP to nearest 25) ---------------------------------
+eq(725, CostCalculator::roundToStep(712), 'roundToStep 712 → 725');
 eq(725, CostCalculator::roundToStep(715), 'roundToStep 715 → 725');
 eq(750, CostCalculator::roundToStep(749), 'roundToStep 749 → 750');
-eq(525, CostCalculator::roundToStep(535.86), 'roundToStep 535.86 → 525');
-eq(650, CostCalculator::roundToStep(660), 'roundToStep 660 → 650');
+eq(825, CostCalculator::roundToStep(815), 'roundToStep 815 → 825');
+eq(850, CostCalculator::roundToStep(830), 'roundToStep 830 → 850');
+eq(550, CostCalculator::roundToStep(535.86), 'roundToStep 535.86 → 550');
+eq(675, CostCalculator::roundToStep(660), 'roundToStep 660 → 675');
 eq(700, CostCalculator::roundToStep(700), 'roundToStep exact 700 → 700');
 eq(0,   CostCalculator::roundToStep(0), 'roundToStep 0 → 0');
-eq(725, CostCalculator::roundToStep(713), 'roundToStep 713 → 725 (12.5 rounds up)');
+eq(725, CostCalculator::roundToStep(713), 'roundToStep 713 → 725');
 
 // --- Full worked example (owner's Ladies 5-9 case) -------------------------
 $r = CostCalculator::calculate([
@@ -24,10 +26,10 @@ $r = CostCalculator::calculate([
 ]);
 
 eq(148.85, $r['discounted_price'],   'worked: discounted price');
-eq(525,    $r['indian_cost_lkr'],    'worked: indian cost LKR (rounded)');
+eq(550,    $r['indian_cost_lkr'],    'worked: indian cost LKR (rounded up)');
 eq(220.0,  $r['weight_per_pair'],    'worked: weight per pair (g)');
-eq(650,    $r['clearance_per_pair'], 'worked: clearance per pair (rounded)');
-eq(1200.0, $r['final_cost'],         'worked: final landed cost');
+eq(675,    $r['clearance_per_pair'], 'worked: clearance per pair (rounded up)');
+eq(1250.0, $r['final_cost'],         'worked: final landed cost');
 
 // --- Guards: no pairs must not divide by zero ------------------------------
 $z = CostCalculator::calculate([

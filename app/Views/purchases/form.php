@@ -2,14 +2,43 @@
 use App\Models\Purchase;
 
 $items = $draft['items'] ?? [];
+$normaliseSize = static fn ($value) => strtolower(preg_replace('/[^0-9a-z]/i', '', (string) $value));
+$sizeCandidates = [];
+foreach ($sizeSets as $set) {
+    $sizeCandidates[$normaliseSize($set['label'])][] = $set;
+}
+$brandCandidates = [];
+foreach ($brands as $brand) {
+    $brandCandidates[strtolower(trim($brand['name']))] = (string) $brand['id'];
+}
 // Seed Alpine with the extracted (or empty) rows.
 $rows = [];
 foreach ($items as $item) {
+    $sizeSetId = (string) ($item['size_set_id'] ?? '');
+    $categoryId = (string) ($item['category_id'] ?? '');
+    $brandId = (string) ($item['brand_id'] ?? '');
+    if ($brandId === '' && !empty($item['brand_name'])) {
+        $brandId = $brandCandidates[strtolower(trim((string) $item['brand_name']))] ?? '';
+    }
+    if ($sizeSetId === '' && !empty($item['size_set_label'])) {
+        $matches = $sizeCandidates[$normaliseSize($item['size_set_label'])] ?? [];
+        if (count($matches) === 1) {
+            $sizeSetId = (string) $matches[0]['id'];
+            $categoryId = (string) ($matches[0]['category_id'] ?? '');
+        }
+    }
     $rows[] = [
+        'brand_id'       => $brandId,
         'brand_name'     => (string) ($item['brand_name'] ?? ''),
+        'new_brand'      => '',
+        'new_category'   => '',
+        'new_size_set'   => '',
+        'new_size_pairs' => '',
         'art_no'         => (string) ($item['art_no'] ?? ''),
         'colour'         => (string) ($item['colour'] ?? ''),
         'size_set_label' => (string) ($item['size_set_label'] ?? ''),
+        'size_set_id'    => $sizeSetId,
+        'category_id'    => $categoryId,
         'pairs_per_set'  => (string) ($item['pairs_per_set'] ?: ''),
         'quantity_sets'  => (string) ($item['quantity_sets'] ?: ''),
         'quantity_pairs' => (string) ($item['quantity_pairs'] ?: ''),
@@ -19,7 +48,7 @@ foreach ($items as $item) {
     ];
 }
 if (!$rows) {
-    $rows[] = ['brand_name' => '', 'art_no' => '', 'colour' => '', 'size_set_label' => '',
+    $rows[] = ['brand_id' => '', 'brand_name' => '', 'new_brand' => '', 'new_category' => '', 'new_size_set' => '', 'new_size_pairs' => '', 'art_no' => '', 'colour' => '', 'size_set_label' => '', 'size_set_id' => '', 'category_id' => '',
                'pairs_per_set' => '', 'quantity_sets' => '', 'quantity_pairs' => '',
                'unit_price' => '', 'line_total' => '', 'matched' => null];
 }
@@ -45,6 +74,7 @@ if (!$rows) {
       <p class="mt-0.5 text-xs opacity-90">
         Confidence: <?= e(ucfirst($conf)) ?>. Nothing has been saved. Correct anything below, then confirm.
       </p>
+      <p class="mt-1.5 text-xs font-semibold"><?= count($draft['items'] ?? []) ?> product line(s) suggested from this scan.</p>
       <?php if (!empty($draft['notes'])): ?>
         <p class="mt-1.5 text-xs opacity-80">Reader's note: <?= e($draft['notes']) ?></p>
       <?php endif; ?>
@@ -59,12 +89,6 @@ if (!$rows) {
 <?php endif; ?>
 
 <!-- Datalists for Autocomplete -->
-<datalist id="brands-list">
-  <?php foreach ($brands as $brand): ?>
-    <option value="<?= e($brand['name']) ?>"></option>
-  <?php endforeach; ?>
-</datalist>
-
 <datalist id="art-no-list">
   <?php foreach ($artNos as $artNo): ?>
     <option value="<?= e($artNo) ?>"></option>
@@ -77,25 +101,24 @@ if (!$rows) {
   <?php endforeach; ?>
 </datalist>
 
-<datalist id="size-sets-list">
-  <?php foreach ($sizeSets as $set): ?>
-    <option value="<?= e($set['label']) ?>"></option>
-  <?php endforeach; ?>
-</datalist>
-
 <form method="post" action="<?= e(url($formAction ?? 'purchases')) ?>" class="space-y-4"
       x-data='{
         rows: <?= e(json_encode($rows, JSON_HEX_APOS | JSON_HEX_QUOT)) ?>,
-        blank() { return { brand_name:"", art_no:"", colour:"", size_set_label:"", pairs_per_set:"", quantity_sets:"", quantity_pairs:"", unit_price:"", line_total:"", matched:null }; },
+        sizeSets: <?= e(json_encode(array_map(fn ($s) => ['id' => (string) $s['id'], 'label' => $s['label'], 'category_id' => (string) ($s['category_id'] ?? ''), 'pairs' => (int) $s['default_pairs']], $sizeSets), JSON_HEX_APOS | JSON_HEX_QUOT)) ?>,
+        blank() { return { brand_id:"", brand_name:"", new_brand:"", new_category:"", new_size_set:"", new_size_pairs:"", art_no:"", colour:"", size_set_label:"", size_set_id:"", category_id:"", pairs_per_set:"", quantity_sets:"", quantity_pairs:"", unit_price:"", line_total:"", matched:null }; },
         add() { this.rows.push(this.blank()); },
         remove(i) { this.rows.splice(i, 1); if (!this.rows.length) this.add(); },
-        recalc(r) {
-          const pairs = parseFloat(r.quantity_pairs) || 0;
-          const rate  = parseFloat(r.unit_price) || 0;
-          if (pairs && rate) r.line_total = (pairs * rate).toFixed(2);
+        onSize(row) {
+          const selected = this.sizeSets.find(s => String(s.id) === String(row.size_set_id));
+          if (!selected) {
+            if (row.size_set_id === "__new__" && !row.new_size_set) row.new_size_set = row.size_set_label;
+            return;
+          }
+          row.size_set_label = selected.label;
+          row.category_id = selected.category_id;
+          row.pairs_per_set = selected.pairs;
         },
-        get totalPairs() { return this.rows.reduce((s, r) => s + (parseInt(r.quantity_pairs) || 0), 0); },
-        get totalValue() { return this.rows.reduce((s, r) => s + (parseFloat(r.line_total) || 0), 0); }
+        get totalPairs() { return this.rows.reduce((s, r) => s + (parseInt(r.quantity_pairs) || 0), 0); }
       }'>
   <?= csrf_field() ?>
   <input type="hidden" name="attachment_id" value="<?= e($draft['attachment_id'] ?? '') ?>">
@@ -144,16 +167,12 @@ if (!$rows) {
     <p class="text-sm font-semibold text-slate-700">Shipment</p>
     <p class="text-xs text-slate-400 -mt-2">Clearance cost is charged by weight, so the total shipment weight matters.</p>
 
-    <div class="grid grid-cols-3 gap-3">
+    <div class="grid grid-cols-2 gap-3">
       <div>
-        <label class="block text-xs font-medium text-slate-500 mb-1">Weight (kg)</label>
-        <input type="number" step="0.01" min="0" name="total_weight_kg" value="<?= e(old('total_weight_kg', $draft['total_weight_kg'])) ?>"
+        <label class="block text-xs font-medium text-slate-500 mb-1">Total shipment weight (kg) *</label>
+        <input type="number" step="0.01" min="0.01" name="total_weight_kg" value="<?= e(old('total_weight_kg', $draft['total_weight_kg'])) ?>"
                class="w-full rounded-xl border-slate-200 px-3 py-2 text-sm ring-1 ring-slate-200">
-      </div>
-      <div>
-        <label class="block text-xs font-medium text-slate-500 mb-1">Parcels</label>
-        <input type="number" min="0" name="expected_parcels" value="<?= e(old('expected_parcels', $draft['expected_parcels'])) ?>"
-               class="w-full rounded-xl border-slate-200 px-3 py-2 text-sm ring-1 ring-slate-200">
+        <?php if ($msg = error('total_weight_kg')): ?><p class="mt-1 text-xs text-red-600"><?= e($msg) ?></p><?php endif; ?>
       </div>
       <div>
         <label class="block text-xs font-medium text-slate-500 mb-1">Invoice value</label>
@@ -169,6 +188,7 @@ if (!$rows) {
       <p class="text-sm font-semibold text-slate-700">Products</p>
       <span class="text-xs text-slate-400" x-text="rows.length + ' line' + (rows.length === 1 ? '' : 's')"></span>
     </div>
+    <p class="mb-3 rounded-xl bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">OCR fills article number, size, colour, Indian MRP and pair count. Before confirming, choose a brand and match the category/size set. If one is missing, select <strong>Add new</strong> to save it to the database.</p>
     <?php if ($msg = error('items')): ?><p class="mb-2 text-xs text-red-600"><?= e($msg) ?></p><?php endif; ?>
 
     <div class="space-y-3">
@@ -189,27 +209,55 @@ if (!$rows) {
           </div>
 
           <div class="grid grid-cols-2 gap-2">
-            <input x-model="row.brand_name" name="item_brand_name[]" list="brands-list" placeholder="Brand" autocomplete="off"
-                   class="rounded-lg border-slate-200 px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
+            <select x-model="row.brand_id" name="item_brand_id[]" required class="col-span-2 rounded-lg border-slate-200 bg-white px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
+              <option value="">Choose brand *</option>
+              <?php foreach ($brands as $brand): ?>
+                <option value="<?= (int) $brand['id'] ?>"><?= e($brand['name']) ?></option>
+              <?php endforeach; ?>
+              <option value="__new__">+ Add new brand</option>
+            </select>
+            <input x-show="row.brand_id === '__new__'" x-model="row.new_brand" name="item_new_brand[]" :required="row.brand_id === '__new__'" placeholder="New brand name"
+                   class="col-span-2 rounded-lg border-brand-200 px-2.5 py-1.5 text-sm ring-1 ring-brand-200">
+            <input type="hidden" x-model="row.brand_name" name="item_brand_name[]">
             <input x-model="row.art_no" name="item_art_no[]" list="art-no-list" placeholder="Art no" autocomplete="off"
                    class="rounded-lg border-slate-200 px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
             <input x-model="row.colour" name="item_colour[]" list="colours-list" placeholder="Colour" autocomplete="off"
                    class="rounded-lg border-slate-200 px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
-            <input x-model="row.size_set_label" name="item_size_set_label[]" list="size-sets-list" placeholder="Size set (5x8)" autocomplete="off"
-                   class="rounded-lg border-slate-200 px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
+            <select x-model="row.category_id" name="item_category_id[]" class="rounded-lg border-slate-200 bg-white px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
+              <option value="">Choose category *</option>
+              <?php foreach ($categories as $category): ?>
+                <option value="<?= (int) $category['id'] ?>"><?= e($category['name']) ?></option>
+              <?php endforeach; ?>
+              <option value="__new__">+ Add new category</option>
+            </select>
+            <input x-show="row.category_id === '__new__'" x-model="row.new_category" name="item_new_category[]" :required="row.category_id === '__new__'" placeholder="New category name"
+                   class="rounded-lg border-brand-200 px-2.5 py-1.5 text-sm ring-1 ring-brand-200">
+            <select x-model="row.size_set_id" @change="onSize(row)" name="item_size_set_id[]" class="col-span-2 rounded-lg border-slate-200 bg-white px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
+              <option value="">Choose size set *</option>
+              <?php foreach ($sizeSets as $set): ?>
+                <option value="<?= (int) $set['id'] ?>"><?= e(($set['category_name'] ? $set['category_name'] . ' ' : '') . $set['label']) ?> (<?= (int) $set['default_pairs'] ?> pr)</option>
+              <?php endforeach; ?>
+              <option value="__new__">+ Add new size set</option>
+            </select>
+            <div x-show="row.size_set_id === '__new__'" class="col-span-2 grid grid-cols-2 gap-2">
+              <input x-model="row.new_size_set" name="item_new_size_set[]" :required="row.size_set_id === '__new__'" placeholder="New size, e.g. 10-11"
+                     class="rounded-lg border-brand-200 px-2.5 py-1.5 text-sm ring-1 ring-brand-200">
+              <input x-model="row.new_size_pairs" name="item_new_size_pairs[]" type="number" min="1" :required="row.size_set_id === '__new__'" placeholder="Pairs / set"
+                     class="rounded-lg border-brand-200 px-2.5 py-1.5 text-sm ring-1 ring-brand-200">
+            </div>
+            <input type="hidden" x-model="row.size_set_label" name="item_size_set_label[]">
+            <p x-show="!row.size_set_id && row.size_set_label" class="col-span-2 rounded-lg bg-amber-50 px-2 py-1.5 text-[10px] font-medium text-amber-700">OCR read size <span x-text="row.size_set_label"></span>. Choose the matching saved size, or choose “Add new size set”.</p>
           </div>
 
-          <div class="mt-2 grid grid-cols-4 gap-2">
-            <input x-model="row.quantity_pairs" @input="recalc(row)" name="item_quantity_pairs[]" type="number" min="0" placeholder="Pairs"
+          <div class="mt-2 grid grid-cols-2 gap-2">
+            <input x-model="row.quantity_pairs" name="item_quantity_pairs[]" type="number" min="0" placeholder="Pair count"
                    class="rounded-lg border-slate-200 px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
-            <input x-model="row.pairs_per_set" name="item_pairs_per_set[]" type="number" min="0" placeholder="/set"
-                   class="rounded-lg border-slate-200 px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
-            <input x-model="row.unit_price" @input="recalc(row)" name="item_unit_price[]" type="number" step="0.01" min="0" placeholder="Rate"
-                   class="rounded-lg border-slate-200 px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
-            <input x-model="row.line_total" name="item_line_total[]" type="number" step="0.01" min="0" placeholder="Amount"
+            <input x-model="row.unit_price" name="item_unit_price[]" type="number" step="0.01" min="0" placeholder="Indian MRP"
                    class="rounded-lg border-slate-200 px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
           </div>
+          <input type="hidden" x-model="row.pairs_per_set" name="item_pairs_per_set[]">
           <input type="hidden" x-model="row.quantity_sets" name="item_quantity_sets[]">
+          <input type="hidden" x-model="row.line_total" name="item_line_total[]">
         </div>
       </template>
     </div>
@@ -221,10 +269,7 @@ if (!$rows) {
 
     <div class="mt-3 flex justify-between rounded-xl bg-slate-800 px-4 py-2.5 text-sm text-white">
       <span>Totals</span>
-      <span>
-        <span x-text="totalPairs"></span> pairs ·
-        <span x-text="totalValue.toFixed(2)"></span>
-      </span>
+      <span><span x-text="totalPairs"></span> pairs</span>
     </div>
   </div>
 
@@ -245,6 +290,6 @@ if (!$rows) {
     </button>
   </div>
   <p class="pb-2 text-center text-xs text-slate-400">
-    Confirming records the purchase only. Stock is added later, after the goods arrive and are counted.
+    Confirming records this invoice and its product lines. Products/stock are created or updated only after the goods arrive and are verified.
   </p>
 </form>

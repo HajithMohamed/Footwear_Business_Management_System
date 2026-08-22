@@ -53,10 +53,10 @@ $methodLabel = [
 
 <!-- Filters -->
 <form method="get" action="<?= e(url('expenses')) ?>" class="mt-3 space-y-2">
-  <input type="text" name="search" value="<?= e($filters['search']) ?>" placeholder="🔍 Payee, reference or note"
+  <input type="text" name="search" value="<?= e($filters['search']) ?>" placeholder="Payee, reference or note" x-data @input.debounce.450ms="$el.form.submit()"
          class="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-600">
   <div class="flex gap-2">
-    <select name="category_id" class="flex-1 rounded-lg border border-slate-200 px-2 py-2 text-xs">
+    <select name="category_id" onchange="this.form.submit()" class="flex-1 rounded-lg border border-slate-200 px-2 py-2 text-xs">
       <option value="">All categories</option>
       <?php foreach ($categories as $c): ?>
         <option value="<?= (int) $c['id'] ?>" <?= (string) $filters['category_id'] === (string) $c['id'] ? 'selected' : '' ?>>
@@ -64,9 +64,8 @@ $methodLabel = [
         </option>
       <?php endforeach; ?>
     </select>
-    <input type="date" name="from" value="<?= e($filters['from']) ?>" class="rounded-lg border border-slate-200 px-2 py-2 text-xs">
-    <input type="date" name="to" value="<?= e($filters['to']) ?>" class="rounded-lg border border-slate-200 px-2 py-2 text-xs">
-    <button class="rounded-lg bg-slate-800 px-3 py-2 text-xs font-medium text-white">Go</button>
+    <input type="date" name="from" value="<?= e($filters['from']) ?>" onchange="this.form.submit()" class="rounded-lg border border-slate-200 px-2 py-2 text-xs">
+    <input type="date" name="to" value="<?= e($filters['to']) ?>" onchange="this.form.submit()" class="rounded-lg border border-slate-200 px-2 py-2 text-xs">
   </div>
 </form>
 

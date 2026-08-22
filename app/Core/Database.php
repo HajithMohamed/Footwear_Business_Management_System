@@ -62,6 +62,12 @@ class Database
         return $this->query($sql, $params)->fetchColumn();
     }
 
+    /** Fetch the first column from every returned row. */
+    public function column(string $sql, array $params = []): array
+    {
+        return $this->query($sql, $params)->fetchAll(PDO::FETCH_COLUMN);
+    }
+
     public function lastInsertId(): int
     {
         return (int) $this->pdo->lastInsertId();

@@ -21,19 +21,24 @@ class CostCalculator
     public const DEFAULT_HANDLING = 25.0;
 
     /**
-     * Round to the nearest step (default Rs.25), round-half-up.
+     * Round up to the next step (default Rs.25).
      *
-     * NOTE: the owner's examples are 712→700, 715→725, 749→750 (nearest-25).
-     * The example 738→725 does NOT fit nearest-25 (that is 750) and is treated
-     * as an inconsistency to confirm — adjust here in ONE place if the shop
-     * actually wants a different rule.
+     * Examples: 815 → 825, 830 → 850, 800 → 800 (already on a step).
+     * Values already on a step boundary are left unchanged.
      */
     public static function roundToStep(float $value, int $step = self::DEFAULT_STEP): int
     {
         if ($step <= 0) {
-            return (int) round($value);
+            return (int) ceil($value);
         }
-        return (int) (round($value / $step, 0, PHP_ROUND_HALF_UP) * $step);
+        if ($value <= 0) {
+            return 0;
+        }
+        $quotient = $value / $step;
+        if (abs($quotient - round($quotient)) < 0.000001) {
+            return (int) round($quotient) * $step;
+        }
+        return (int) (ceil($quotient) * $step);
     }
 
     /**

@@ -8,9 +8,13 @@ use App\Core\Request;
 use App\Core\Session;
 use App\Models\ArrivalCount;
 use App\Models\ArrivalItem;
+use App\Models\Brand;
+use App\Models\Category;
 use App\Models\GoodsArrival;
 use App\Models\Parcel;
 use App\Models\Purchase;
+use App\Models\PurchaseItem;
+use App\Models\SizeSet;
 
 /**
  * Goods arrival verification.
@@ -78,48 +82,125 @@ class ArrivalController extends Controller
         $arrivalId = (int) $arrival['id'];
 
         $items = $this->items->byArrival($arrivalId);
-        $groupedItems = [];
-        foreach ($items as $item) {
-            $artNo = trim((string) ($item['art_no'] ?? '')) ?: 'Unnamed';
-            if (!isset($groupedItems[$artNo])) {
-                $groupedItems[$artNo] = [
-                    'art_no'         => $artNo,
-                    'brand_name'     => $item['brand_name'] ?? 'Other',
-                    'product_thumb'  => $item['product_thumb'],
-                    'expected_pairs' => 0,
-                    'received_pairs' => 0,
-                    'items'          => [],
-                ];
-            }
-            $groupedItems[$artNo]['expected_pairs'] += (int) $item['expected_pairs'];
-            $groupedItems[$artNo]['received_pairs'] += (int) $item['received_pairs'];
-            $groupedItems[$artNo]['items'][] = $item;
-        }
-
-        foreach ($groupedItems as &$group) {
-            $diff = $group['received_pairs'] - $group['expected_pairs'];
-            $isPending = true;
-            foreach ($group['items'] as $it) {
-                if ($it['status'] !== 'pending') $isPending = false;
-            }
-            if ($isPending) {
-                $group['status'] = 'pending';
-            } else {
-                $group['status'] = $diff === 0 ? 'matched' : ($diff < 0 ? 'shortage' : 'excess');
-            }
-        }
+        $groupedItems = $this->groupItems($items);
+        $parcels = (new Parcel())->summary($purchaseId);
 
         $this->view('arrivals/verify', [
             'title'        => 'Verify Arrival — ' . $purchase['purchase_number'],
             'purchase'     => $purchase,
             'arrival'      => $arrival,
             'groupedItems' => array_values($groupedItems),
-            'items'        => $items, // Keep original for incremental dropdown
+            'items'        => $items,
             'counts'       => (new ArrivalCount())->byArrivalGrouped($arrivalId),
-            'totals'     => $this->items->totals($arrivalId),
-            'parcels'    => (new Parcel())->summary($purchaseId),
-            'gate'       => $this->arrivals->canConfirm($arrivalId),
+            'totals'       => $this->items->totals($arrivalId),
+            'parcels'      => $parcels,
+            'gate'         => $this->arrivals->canConfirm($arrivalId),
+            'summary'      => $this->buildSummary($purchase, $arrival, $groupedItems, $parcels),
+            'brands'       => (new Brand())->active(),
+            'categories'   => (new Category())->active(),
+            'sizeSets'     => (new SizeSet())->active(),
         ]);
+    }
+
+    /** Correct the one client-supplied shipment weight, including old zero-weight records. */
+    public function saveWeight(Request $request, array $params): void
+    {
+        [$purchaseId, $arrival] = $this->resolve($params);
+        $weight = max(0, (float) $request->input('total_weight_kg', 0));
+        if ($weight <= 0) {
+            Session::flash('error', 'Enter the total shipment weight supplied by the client.');
+            $this->redirect('purchases/' . $purchaseId . '/arrival');
+        }
+
+        $this->purchases->update($purchaseId, ['total_weight_kg' => $weight]);
+        $this->arrivals->update((int) $arrival['id'], ['weight_expected_kg' => $weight]);
+        Session::flash('success', 'Total shipment weight saved.');
+        $this->redirect('purchases/' . $purchaseId . '/arrival');
+    }
+
+    /** Resolve required catalogue data before an arrival may create inventory. */
+    public function updateProductDetails(Request $request, array $params): void
+    {
+        [$purchaseId] = $this->resolve($params);
+        $purchaseItemId = (int) ($params['itemId'] ?? 0);
+        $purchaseItem = (new PurchaseItem())->find($purchaseItemId);
+        if (!$purchaseItem || (int) $purchaseItem['purchase_id'] !== $purchaseId) {
+            $this->abort(404, 'Purchase product line not found.');
+        }
+
+        $brandId = ctype_digit((string) $request->input('brand_id', ''))
+            ? (int) $request->input('brand_id') : 0;
+        if ($brandId === 0) {
+            $brandId = (new Brand())->findOrCreate(trim((string) $request->input('new_brand', '')), 'imported');
+        }
+        $brand = $brandId > 0 ? (new Brand())->find($brandId) : null;
+        if (!$brand) {
+            Session::flash('error', 'Choose a brand or add the missing brand.');
+            $this->redirect('purchases/' . $purchaseId . '/arrival');
+        }
+
+        $categoryId = ctype_digit((string) $request->input('category_id', ''))
+            ? (int) $request->input('category_id') : 0;
+        if ($categoryId === 0) {
+            $categoryId = (new Category())->findOrCreate(trim((string) $request->input('new_category', '')));
+        }
+
+        $sizeSetId = ctype_digit((string) $request->input('size_set_id', ''))
+            ? (int) $request->input('size_set_id') : 0;
+        $sizeSet = $sizeSetId > 0 ? (new SizeSet())->find($sizeSetId) : null;
+        if ($sizeSet && !empty($sizeSet['category_id'])) {
+            $categoryId = (int) $sizeSet['category_id'];
+        }
+        if ($sizeSetId === 0) {
+            $newLabel = trim((string) $request->input('new_size_set', ''));
+            $newPairs = max(0, (int) $request->input('new_pairs_per_set', 0));
+            if ($categoryId > 0 && $newLabel !== '') {
+                $sizeSetId = (new SizeSet())->findOrCreate($newLabel, $categoryId, $newPairs ?: null);
+                $sizeSet = (new SizeSet())->find($sizeSetId);
+            }
+        }
+
+        if ($categoryId <= 0 || !$sizeSet) {
+            Session::flash('error', 'Choose or add both the category and size set.');
+            $this->redirect('purchases/' . $purchaseId . '/arrival');
+        }
+
+        (new PurchaseItem())->update($purchaseItemId, [
+            'brand_id'       => $brandId,
+            'brand_name'     => $brand['name'],
+            'category_id'    => $categoryId,
+            'size_set_id'    => $sizeSetId,
+            'size_set_label' => $sizeSet['label'],
+            'pairs_per_set'  => (int) $sizeSet['default_pairs'],
+        ]);
+        (new PurchaseItem())->autoMatchProducts($purchaseId);
+
+        Session::flash('success', 'Product setup saved.');
+        $this->redirect('purchases/' . $purchaseId . '/arrival');
+    }
+
+    /** Convenience for single-brand invoices: fill every unresolved line once. */
+    public function applyBrand(Request $request, array $params): void
+    {
+        [$purchaseId] = $this->resolve($params);
+        $brandId = ctype_digit((string) $request->input('brand_id', ''))
+            ? (int) $request->input('brand_id') : 0;
+        if ($brandId === 0) {
+            $brandId = (new Brand())->findOrCreate(trim((string) $request->input('new_brand', '')), 'imported');
+        }
+        $brand = $brandId > 0 ? (new Brand())->find($brandId) : null;
+        if (!$brand) {
+            Session::flash('error', 'Choose a brand or enter a new brand name.');
+            $this->redirect('purchases/' . $purchaseId . '/arrival');
+        }
+
+        \App\Core\Database::instance()->query(
+            'UPDATE purchase_items SET brand_id = ?, brand_name = ? WHERE purchase_id = ? AND brand_id IS NULL',
+            [$brandId, $brand['name'], $purchaseId]
+        );
+        (new PurchaseItem())->autoMatchProducts($purchaseId);
+        Session::flash('success', 'Brand applied to every product line that was missing one.');
+        $this->redirect('purchases/' . $purchaseId . '/arrival');
     }
 
     /** Final count: one received quantity per line, entered in one pass. */
@@ -133,29 +214,24 @@ class ArrivalController extends Controller
         $remarks  = $input['item_remarks'] ?? [];
 
         $items = $this->items->byArrival($arrivalId);
-        $grouped = [];
-        foreach ($items as $item) {
-            $artNo = trim((string) ($item['art_no'] ?? '')) ?: 'Unnamed';
-            $grouped[$artNo][] = $item;
-        }
+        $grouped = $this->groupItems($items);
 
-        foreach ($grouped as $artNo => $groupItems) {
-            if (!array_key_exists($artNo, $received) || $received[$artNo] === '') {
+        foreach ($grouped as $groupKey => $group) {
+            if (!array_key_exists($groupKey, $received) || $received[$groupKey] === '') {
                 continue;
             }
-            
-            $totalReceived = max(0, (int) $received[$artNo]);
-            $remark = trim((string) ($remarks[$artNo] ?? '')) ?: null;
+
+            $totalReceived = max(0, (int) $received[$groupKey]);
+            $remark = trim((string) ($remarks[$groupKey] ?? '')) ?: null;
+            $groupItems = $group['items'];
 
             foreach ($groupItems as $idx => $item) {
                 $id = (int) $item['id'];
                 $expected = (int) $item['expected_pairs'];
-                
+
                 if ($idx === count($groupItems) - 1) {
-                    // Last item takes whatever is left
                     $this->items->setReceived($id, $totalReceived, $remark);
                 } else {
-                    // Give up to expected, if available
                     $take = min($expected, $totalReceived);
                     $this->items->setReceived($id, $take, $remark);
                     $totalReceived -= $take;
@@ -255,6 +331,116 @@ class ArrivalController extends Controller
                 : ''
         ));
         $this->redirect('purchases/' . $purchaseId . '/costing');
+    }
+
+    /** Group invoice lines by art number + category (colours count together). */
+    private function groupItems(array $items): array
+    {
+        $grouped = [];
+        foreach ($items as $item) {
+            $key = self::groupKey($item);
+            if (!isset($grouped[$key])) {
+                $grouped[$key] = [
+                    'group_key'      => $key,
+                    'art_no'         => trim((string) ($item['art_no'] ?? '')) ?: 'Unnamed',
+                    'category_name'  => trim((string) ($item['category_name'] ?? '')) ?: 'General',
+                    'brand_name'     => $item['mapped_brand_name'] ?? $item['brand_name'] ?? '',
+                    'product_thumb'  => $item['product_thumb'],
+                    'expected_pairs' => 0,
+                    'received_pairs' => 0,
+                    'items'          => [],
+                ];
+            }
+            if (!$grouped[$key]['product_thumb'] && !empty($item['product_thumb'])) {
+                $grouped[$key]['product_thumb'] = $item['product_thumb'];
+            }
+            $grouped[$key]['expected_pairs'] += (int) $item['expected_pairs'];
+            $grouped[$key]['received_pairs'] += (int) $item['received_pairs'];
+            $grouped[$key]['items'][] = $item;
+        }
+
+        foreach ($grouped as &$group) {
+            $diff = $group['received_pairs'] - $group['expected_pairs'];
+            $isPending = true;
+            foreach ($group['items'] as $it) {
+                if ($it['status'] !== 'pending') {
+                    $isPending = false;
+                }
+            }
+            $group['status'] = $isPending
+                ? 'pending'
+                : ($diff === 0 ? 'matched' : ($diff < 0 ? 'shortage' : 'excess'));
+            $group['difference'] = $diff;
+        }
+
+        return $grouped;
+    }
+
+    /** @param array<string,mixed> $item */
+    public static function groupKey(array $item): string
+    {
+        $artNo    = trim((string) ($item['art_no'] ?? '')) ?: 'Unnamed';
+        $category = trim((string) ($item['category_name'] ?? '')) ?: 'General';
+        return $artNo . '::' . $category;
+    }
+
+    /** Weight, pairs and clearance payment summary for the verification screen. */
+    private function buildSummary(array $purchase, array $arrival, array $groupedItems, array $parcels): array
+    {
+        $w = $purchase['weights'] ?? [];
+        $expectedPairs = 0;
+        $receivedPairs = 0;
+        $shortages     = [];
+
+        foreach ($groupedItems as $group) {
+            $expectedPairs += (int) $group['expected_pairs'];
+            $receivedPairs += (int) $group['received_pairs'];
+            $diff = (int) ($group['difference'] ?? 0);
+            if ($diff < 0) {
+                $shortages[] = [
+                    'label'    => trim(($group['brand_name'] ?? '') . ' ' . ($group['art_no'] ?? '')),
+                    'category' => $group['category_name'],
+                    'missing'  => abs($diff),
+                    'expected' => (int) $group['expected_pairs'],
+                    'received' => (int) $group['received_pairs'],
+                ];
+            }
+        }
+
+        $arrivedWeight = (float) ($w['arrived'] ?? $parcels['weight'] ?? 0);
+        $billWeight    = (float) ($w['total'] ?? 0);
+        $agentCost     = 0.0;
+        $agentRate     = 0.0;
+
+        foreach ($purchase['assignments'] ?? [] as $assignment) {
+            if (($assignment['status'] ?? '') === 'cancelled') {
+                continue;
+            }
+            $agentCost += (float) ($assignment['clearance_cost'] ?? 0);
+            if ((float) ($assignment['rate_per_kg'] ?? 0) > 0) {
+                $agentRate = (float) $assignment['rate_per_kg'];
+            }
+        }
+
+        // Pay clearance on arrived weight at the agent's per-kg rate.
+        $payableWeight = $arrivedWeight > 0 ? $arrivedWeight : (float) ($parcels['weight'] ?? 0);
+        $clearancePay  = $agentRate > 0
+            ? round($payableWeight * $agentRate, 2)
+            : $agentCost;
+
+        return [
+            'expected_pairs'  => $expectedPairs,
+            'received_pairs'  => $receivedPairs,
+            'missing_pairs'   => max(0, $expectedPairs - $receivedPairs),
+            'bill_weight_kg'  => $billWeight,
+            'arrived_weight'  => $arrivedWeight,
+            'weight_diff_kg'  => round($arrivedWeight - $billWeight, 2),
+            'clearance_rate'  => $agentRate,
+            'clearance_pay'   => $clearancePay,
+            'shortages'       => $shortages,
+            'parcels_ok'      => (bool) ($parcels['matches'] ?? false),
+            'partial_receipt' => (int) ($arrival['partial_receipt'] ?? 0) === 1,
+        ];
     }
 
     /** @return array{0:int,1:array} */

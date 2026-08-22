@@ -2,11 +2,11 @@
 use App\Services\StorageService;
 
 $statusMeta = [
-    'deposited' => ['Bank', 'Deposited', 'bg-blue-100 text-blue-700'],
-    'pending'   => ['⏳', 'Pending',   'bg-amber-100 text-amber-700'],
-    'cleared'   => ['✅', 'Cleared',   'bg-green-100 text-green-700'],
-    'bounced'   => ['❌', 'Bounced',   'bg-red-100 text-red-700'],
-    'cancelled' => ['🚫', 'Cancelled', 'bg-slate-100 text-slate-700'],
+    'deposited' => ['cheque', 'Deposited', 'bg-blue-100 text-blue-700'],
+    'pending'   => ['calendar', 'Pending',   'bg-amber-100 text-amber-700'],
+    'cleared'   => ['check', 'Cleared',   'bg-green-100 text-green-700'],
+    'bounced'   => ['warning', 'Bounced',   'bg-red-100 text-red-700'],
+    'cancelled' => ['trash', 'Cancelled', 'bg-slate-100 text-slate-700'],
 ];
 $countFor = function (string $status) use ($stats): int {
     foreach ($stats ?? [] as $s) {
@@ -42,7 +42,7 @@ $countFor = function (string $status) use ($stats): int {
 <?php if (!empty($dueSoon)): ?>
   <div class="mt-3 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">
     <div class="border-b border-slate-100 bg-amber-50 px-4 py-3">
-      <h2 class="text-sm font-semibold text-amber-800">🔔 Bank these now</h2>
+      <h2 class="flex items-center gap-2 text-sm font-semibold text-amber-800"><?= ui_icon('cheque', 'h-5 w-5') ?> Bank these now</h2>
       <p class="text-[11px] text-amber-600">Due within <?= (int) $reminderDays ?> days, or already past</p>
     </div>
     <ul class="divide-y divide-slate-50">
@@ -73,11 +73,11 @@ $countFor = function (string $status) use ($stats): int {
 <?php endif; ?>
 
 <!-- Status filter -->
-<div class="mt-4 flex gap-2 overflow-x-auto pb-2">
+<div class="mt-4 flex flex-wrap gap-2 pb-2">
   <?php foreach ($statusMeta as $status => [$icon, $label, ]): ?>
     <a href="<?= e(url("cheques?status={$status}")) ?>"
        class="whitespace-nowrap rounded-full px-3 py-1 text-sm font-medium <?= $filter_status === $status ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200' ?>">
-      <?= $icon ?> <?= $label ?> (<?= $countFor($status) ?>)
+      <span class="inline-flex items-center gap-1.5"><?= ui_icon($icon, 'h-4 w-4') ?> <?= $label ?> (<?= $countFor($status) ?>)</span>
     </a>
   <?php endforeach; ?>
 </div>
@@ -121,7 +121,7 @@ $countFor = function (string $status) use ($stats): int {
         </div>
         <?php if ($late): ?>
           <p class="mt-2 rounded-lg bg-red-50 px-2.5 py-1.5 text-[11px] text-red-700">
-            ⚠ Should have been banked <?= (int) ((strtotime('today') - strtotime($due)) / 86400) ?> day(s) ago
+            <span class="inline-flex items-center gap-1.5"><?= ui_icon('warning', 'h-4 w-4') ?> Should have been banked <?= (int) ((strtotime('today') - strtotime($due)) / 86400) ?> day(s) ago</span>
           </p>
         <?php endif; ?>
         <?php if ($c['status'] === 'bounced' && $c['bounce_reason']): ?>
