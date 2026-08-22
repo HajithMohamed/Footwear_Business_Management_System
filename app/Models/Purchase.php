@@ -275,4 +275,20 @@ class Purchase extends Model
             "SELECT * FROM purchases ORDER BY created_at DESC LIMIT {$limit}"
         );
     }
+
+    /** Other invoices recorded under the same supplier name. */
+    public function billsForSupplier(string $supplierName, int $excludeId = 0, int $limit = 20): array
+    {
+        $limit = max(1, min(100, $limit));
+        return $this->db()->all(
+            "SELECT id, purchase_number, supplier_invoice_no, invoice_date,
+                    total_invoice_value, status
+               FROM purchases
+              WHERE LOWER(TRIM(supplier_name)) = LOWER(TRIM(?))
+                AND id <> ?
+           ORDER BY COALESCE(invoice_date, purchase_date) DESC, id DESC
+              LIMIT {$limit}",
+            [$supplierName, $excludeId]
+        );
+    }
 }

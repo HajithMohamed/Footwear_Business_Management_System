@@ -17,6 +17,8 @@ class PurchaseItem extends Model
         return $this->db()->all(
             'SELECT pi.*,
                     b.name AS mapped_brand_name,
+                    c.name AS category_name,
+                    ss.label AS mapped_size_set_label,
                     pr.art_no AS product_art_no,
                     pr.pairs_in_set AS product_pairs_in_set,
                     (SELECT thumb_path FROM product_images img
@@ -24,6 +26,8 @@ class PurchaseItem extends Model
                    ORDER BY img.is_main DESC, img.sort_order, img.id LIMIT 1) AS product_thumb
                FROM purchase_items pi
           LEFT JOIN brands b   ON b.id  = pi.brand_id
+          LEFT JOIN categories c ON c.id = pi.category_id
+          LEFT JOIN size_sets ss ON ss.id = pi.size_set_id
           LEFT JOIN products pr ON pr.id = pi.product_id
               WHERE pi.purchase_id = ?
            ORDER BY pi.sort_order, pi.id',
@@ -60,7 +64,7 @@ class PurchaseItem extends Model
      * identity whenever the invoice line states one — without it, a repeat purchase
      * would post both colours' stock onto whichever variant was created first.
      */
-    public function findMatchingProduct(?string $artNo, ?string $brandName = null, ?string $colour = null): ?array
+    public function findMatchingProduct(?string $artNo, ?string $brandName = null, ?string $colour = null, ?int $categoryId = null): ?array
     {
         $artNo = trim((string) $artNo);
         if ($artNo === '') {
@@ -68,20 +72,15 @@ class PurchaseItem extends Model
         }
 
         $alnum  = strtolower(preg_replace('/[^a-z0-9]/i', '', $artNo));
-        $digits = preg_replace('/\D/', '', $artNo);
         if ($alnum === '') {
             return null;
         }
 
-        // Two passes, strictest first. The same product is written "W-74018",
-        // "W74018" and "74018" across a printed invoice and a handwritten note, so
-        // if punctuation-insensitive matching finds nothing, fall back to comparing
-        // the digits alone. Brand and colour still constrain both passes, which is
-        // what keeps the looser pass from colliding across brands.
-        foreach (array_unique(array_filter([$alnum, $digits])) as $pass => $needle) {
-            $column = ($needle === $digits && $needle !== $alnum)
-                ? "REGEXP_REPLACE(p.art_no, '[^0-9]', '')"
-                : "REGEXP_REPLACE(LOWER(p.art_no), '[^a-z0-9]', '')";
+        // Spaces and punctuation are formatting differences ("W 53200" and
+        // "W-53200"), but alphabetic prefixes are part of the article number.
+        // Never match W 7395 to WL7395 merely because their digits agree.
+        foreach ([$alnum] as $needle) {
+            $column = "REGEXP_REPLACE(LOWER(p.art_no), '[^a-z0-9]', '')";
 
             $sql = "SELECT p.id, p.art_no, p.name, p.brand_id, p.pairs_in_set, p.stock_sets, b.name AS brand_name
                       FROM products p
@@ -93,6 +92,11 @@ class PurchaseItem extends Model
             if ($brandName !== null && trim($brandName) !== '') {
                 $sql     .= ' AND (b.name IS NULL OR LOWER(b.name) = ?)';
                 $params[] = strtolower(trim($brandName));
+            }
+
+            if ($categoryId !== null && $categoryId > 0) {
+                $sql .= ' AND p.category_id = ?';
+                $params[] = $categoryId;
             }
 
             // Colour variants share an art number, so a stated colour must also
@@ -124,7 +128,12 @@ class PurchaseItem extends Model
                 $summary['matched']++;
                 continue;
             }
-            $product = $this->findMatchingProduct($item['art_no'], $item['brand_name'], $item['colour']);
+            $product = $this->findMatchingProduct(
+                $item['art_no'],
+                $item['brand_name'],
+                $item['colour'],
+                !empty($item['category_id']) ? (int) $item['category_id'] : null
+            );
             if ($product) {
                 $this->update((int) $item['id'], [
                     'product_id'   => $product['id'],

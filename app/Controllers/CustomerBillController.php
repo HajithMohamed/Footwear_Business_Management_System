@@ -4,11 +4,14 @@ namespace App\Controllers;
 
 use App\Core\Auth;
 use App\Core\Controller;
+use App\Core\Database;
 use App\Core\Request;
 use App\Core\Session;
 use App\Models\Customer;
 use App\Models\CustomerTransaction;
 use App\Services\CustomerIntelligenceService;
+use App\Services\CustomerLedgerService;
+use App\Services\StorageService;
 
 /**
  * External customer bills.
@@ -19,6 +22,16 @@ use App\Services\CustomerIntelligenceService;
  */
 class CustomerBillController extends Controller
 {
+    public function selectCustomer(Request $request): void
+    {
+        $search = trim((string) $request->query('search', ''));
+        $this->view('customers/select-for-bill', [
+            'title' => 'Add Bill',
+            'customers' => (new Customer())->search(['search' => $search]),
+            'search' => $search,
+        ]);
+    }
+
     public function create(Request $request, array $params): void
     {
         $customerId = (int) $params['customerId'];
@@ -29,10 +42,11 @@ class CustomerBillController extends Controller
         }
 
         $this->view('customers/bill', [
-            'title'      => 'Attach Bill - ' . $customer['name'],
+            'title'      => 'Add Bill — ' . $customer['name'],
             'customer'   => $customer,
             'today'      => date('Y-m-d'),
             'creditDays' => $this->manualBillCreditDays(),
+            'recentTransactions' => (new CustomerTransaction())->byCustomer($customerId, 5),
         ]);
     }
 
@@ -50,6 +64,7 @@ class CustomerBillController extends Controller
         $billDate   = $this->date($request->input('bill_date')) ?? date('Y-m-d');
         $amount     = (float) $request->input('amount');
         $notes      = trim((string) $request->input('notes'));
+        $image      = $request->file('bill_image');
 
         if ($billNumber === '') {
             Session::flash('error', 'Bill number is required.');
@@ -72,21 +87,48 @@ class CustomerBillController extends Controller
             return;
         }
 
+        if ($image && ($image['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+            if ($error = (new StorageService())->validateImage($image)) {
+                Session::flash('error', $error);
+                Session::flashInput($request->all());
+                $this->redirect("customers/{$customerId}/bill");
+            }
+        }
+
         $dueDate = (new \DateTimeImmutable($billDate))
             ->modify('+' . $this->manualBillCreditDays() . ' days')
             ->format('Y-m-d');
 
-        $transactionId = $ledger->postManualBill(
-            $customerId,
-            $billNumber,
-            $billDate,
-            $amount,
-            $dueDate,
-            Auth::id(),
-            $notes !== '' ? $notes : null
-        );
+        $previousOutstanding = 0.0;
+        $transactionId = Database::instance()->transaction(function () use (
+            $customerId, $billNumber, $billDate, $amount, $dueDate, $notes,
+            $ledger, $customerModel, &$previousOutstanding
+        ): int {
+            $locked = Database::instance()->first('SELECT outstanding_due FROM customers WHERE id = ? FOR UPDATE', [$customerId]);
+            if (!$locked) throw new \RuntimeException('Customer is no longer available.');
+            $previousOutstanding = (float) $locked['outstanding_due'];
+            $newOutstanding = round($previousOutstanding + $amount, 2);
+            $id = $ledger->create([
+                'customer_id' => $customerId,
+                'transaction_type' => 'sale',
+                'amount' => round($amount, 2),
+                'running_balance' => $newOutstanding,
+                'transaction_date' => $billDate,
+                'reference_type' => 'manual_bill',
+                'reference_id' => null,
+                'bill_number' => $billNumber,
+                'due_date' => $dueDate,
+                'description' => 'Manual bill #' . $billNumber . ($notes !== '' ? ' - ' . $notes : ''),
+                'created_by' => Auth::id(),
+            ]);
+            $customerModel->updateOutstanding($customerId, $newOutstanding);
+            return $id;
+        });
 
-        $customerModel->updateOutstanding($customerId, $ledger->currentBalance($customerId));
+        if ($image && ($image['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
+            $stored = (new StorageService())->storeCustomerBillImage($image, $transactionId);
+            $ledger->attachBillImage($transactionId, $stored['path'], $stored['thumb_path']);
+        }
         $this->refreshIntelligence($customerId);
         $this->log('customer.bill_attached', 'customer_transaction', $transactionId, [
             'customer_id' => $customerId,
@@ -96,8 +138,69 @@ class CustomerBillController extends Controller
             'due_date'    => $dueDate,
         ]);
 
-        Session::flash('success', "Bill #{$billNumber} attached and added to outstanding.");
-        $this->redirect("customers/{$customerId}");
+        $this->redirect("bills/{$transactionId}/receipt");
+    }
+
+    public function receipt(Request $request, array $params): void
+    {
+        $bill = (new CustomerTransaction())->manualBillReceipt((int) $params['id']);
+        if (!$bill) $this->abort(404, 'Bill not found.');
+        $this->view('customers/bill-receipt', ['title' => 'Bill Added', 'bill' => $bill]);
+    }
+
+    public function edit(Request $request, array $params): void
+    {
+        $bill = (new CustomerTransaction())->manualBillReceipt((int) $params['id']);
+        if (!$bill) {
+            $this->abort(404, 'Bill not found.');
+        }
+        $prefix = 'Manual bill #' . ($bill['bill_number'] ?? '');
+        $bill['notes'] = trim(str_starts_with((string) $bill['description'], $prefix)
+            ? substr((string) $bill['description'], strlen($prefix))
+            : (string) $bill['description'], " -\t\n\r\0\x0B");
+        $this->view('customers/bill-edit', ['title' => 'Edit Bill', 'bill' => $bill]);
+    }
+
+    public function update(Request $request, array $params): void
+    {
+        $billId = (int) $params['id'];
+        $ledger = new CustomerTransaction();
+        $bill = $ledger->manualBillReceipt($billId);
+        if (!$bill) {
+            $this->abort(404, 'Bill not found.');
+        }
+        $customerId = (int) $bill['customer_id'];
+        $number = trim((string) $request->input('bill_number'));
+        $date = $this->date($request->input('bill_date'));
+        $amount = round((float) $request->input('amount'), 2);
+        $notes = trim((string) $request->input('notes'));
+        if ($number === '' || !$date || $amount <= 0) {
+            Session::flash('error', 'Bill number, valid date and an amount greater than zero are required.');
+            Session::flashInput($request->all());
+            $this->redirect("bills/{$billId}/edit");
+        }
+        if ($ledger->manualBillExists($customerId, $number, $billId)) {
+            Session::flash('error', "Bill #{$number} is already attached to this customer.");
+            Session::flashInput($request->all());
+            $this->redirect("bills/{$billId}/edit");
+        }
+        $dueDate = (new \DateTimeImmutable($date))->modify('+' . $this->manualBillCreditDays() . ' days')->format('Y-m-d');
+
+        Database::instance()->transaction(function () use ($billId, $customerId, $number, $date, $amount, $notes, $dueDate, $ledger): void {
+            Database::instance()->first('SELECT id FROM customers WHERE id = ? FOR UPDATE', [$customerId]);
+            $ledger->update($billId, [
+                'bill_number' => $number,
+                'transaction_date' => $date,
+                'amount' => $amount,
+                'due_date' => $dueDate,
+                'description' => 'Manual bill #' . $number . ($notes !== '' ? ' - ' . $notes : ''),
+            ]);
+            (new CustomerLedgerService())->recalculate($customerId);
+        });
+        $this->refreshIntelligence($customerId);
+        $this->log('customer.bill_corrected', 'customer_transaction', $billId, ['customer_id' => $customerId, 'amount' => $amount]);
+        Session::flash('success', 'Bill corrected and all customer balances recalculated.');
+        $this->redirect("customers/{$customerId}?tab=ledger");
     }
 
     private function manualBillCreditDays(): int

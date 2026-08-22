@@ -94,4 +94,15 @@ class PurchaseClearanceAssignment extends Model
             [$status, $purchaseId]
         );
     }
+
+    public function setPaymentStatus(int $id, string $status): void
+    {
+        if (!in_array($status, ['pending', 'paid'], true)) {
+            throw new \InvalidArgumentException('Invalid clearance payment status.');
+        }
+        $this->update($id, [
+            'payment_status' => $status,
+            'paid_at'        => $status === 'paid' ? date('Y-m-d H:i:s') : null,
+        ]);
+    }
 }

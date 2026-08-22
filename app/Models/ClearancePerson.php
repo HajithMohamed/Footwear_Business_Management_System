@@ -41,22 +41,48 @@ class ClearancePerson extends Model
                     COALESCE(agg.shipments, 0)     AS shipments,
                     COALESCE(agg.total_weight, 0)  AS total_weight,
                     COALESCE(agg.total_cost, 0)    AS total_cost,
-                    COALESCE(agg.open_shipments, 0) AS open_shipments
+                    COALESCE(agg.open_shipments, 0) AS open_shipments,
+                    COALESCE(agg.waiting_parcels, 0) AS waiting_parcels,
+                    COALESCE(agg.expected_pairs, 0) AS expected_pairs,
+                    COALESCE(agg.awaiting_verification, 0) AS awaiting_verification
                FROM clearance_persons cp
           LEFT JOIN (
                     SELECT clearance_person_id,
                            COUNT(*) AS shipments,
                            SUM(assigned_weight_kg) AS total_weight,
                            SUM(clearance_cost) AS total_cost,
-                           SUM(status IN ('assigned','in_transit')) AS open_shipments
-                      FROM purchase_clearance_assignments
-                     WHERE status <> 'cancelled'
+                           SUM(a.status IN ('assigned','in_transit')) AS open_shipments,
+                           SUM(CASE WHEN a.status IN ('assigned','in_transit') THEN
+                               (SELECT COUNT(*) FROM parcels par
+                                 WHERE par.assignment_id = a.id AND par.status = 'expected') ELSE 0 END) AS waiting_parcels,
+                           SUM(CASE WHEN a.status IN ('assigned','in_transit') THEN
+                               (SELECT COALESCE(SUM(pi.quantity_pairs), 0) FROM purchase_items pi
+                                 WHERE pi.purchase_id = a.purchase_id) ELSE 0 END) AS expected_pairs,
+                           SUM(p.status IN ('arrived','verification_pending')) AS awaiting_verification
+                      FROM purchase_clearance_assignments a
+                      JOIN purchases p ON p.id = a.purchase_id
+                     WHERE a.status <> 'cancelled'
                   GROUP BY clearance_person_id
                  ) agg ON agg.clearance_person_id = cp.id
               WHERE {$where}
            ORDER BY cp.is_active DESC, cp.name",
             $params
         );
+    }
+
+    public function hasOpenAssignments(int $id): bool
+    {
+        return (int) $this->db()->scalar(
+            "SELECT COUNT(*) FROM purchase_clearance_assignments
+              WHERE clearance_person_id = ? AND status IN ('assigned','in_transit')",
+            [$id]
+        ) > 0;
+    }
+
+    /** Keep assignment history intact while removing a person from active use. */
+    public function deactivate(int $id): void
+    {
+        $this->update($id, ['is_active' => 0]);
     }
 
     /** Full assignment history for one agent. */
@@ -115,11 +141,20 @@ class ClearancePerson extends Model
     {
         return $this->db()->all(
             "SELECT a.*, p.purchase_number, p.supplier_name, p.status AS purchase_status,
-                    p.total_weight_kg AS shipment_total_weight,
-                    p.costed_at,
-                    (SELECT SUM(quantity_pairs) FROM purchase_items pi WHERE pi.purchase_id = p.id) AS total_pairs
+                    p.supplier_invoice_no, p.invoice_date, p.total_invoice_value,
+                    p.total_weight_kg AS shipment_total_weight, p.costed_at,
+                    ga.weight_received_kg AS arrived_weight_kg,
+                    ga.status AS verification_status, ga.verified_at,
+                    (SELECT COUNT(*) FROM purchase_items pi WHERE pi.purchase_id = p.id) AS item_lines,
+                    (SELECT COALESCE(SUM(quantity_pairs), 0) FROM purchase_items pi WHERE pi.purchase_id = p.id) AS total_pairs,
+                    (SELECT COALESCE(SUM(ai.received_pairs), 0)
+                       FROM goods_arrivals gx
+                       JOIN arrival_items ai ON ai.arrival_id = gx.id
+                      WHERE gx.purchase_id = p.id) AS received_pairs,
+                    a.clearance_cost AS payable_amount
                FROM purchase_clearance_assignments a
                JOIN purchases p ON p.id = a.purchase_id
+          LEFT JOIN goods_arrivals ga ON ga.purchase_id = p.id
               WHERE a.clearance_person_id = ?
            ORDER BY a.assignment_date DESC, a.id DESC",
             [$id]
@@ -130,9 +165,14 @@ class ClearancePerson extends Model
     public function invoiceItems(int $purchaseId): array
     {
         return $this->db()->all(
-            "SELECT pi.*, b.name AS brand_name_resolved
+            "SELECT pi.*, b.name AS brand_name_resolved,
+                    c.name AS category_name,
+                    ai.received_pairs
                FROM purchase_items pi
           LEFT JOIN brands b ON b.id = pi.brand_id
+          LEFT JOIN categories c ON c.id = pi.category_id
+          LEFT JOIN goods_arrivals ga ON ga.purchase_id = pi.purchase_id
+          LEFT JOIN arrival_items ai ON ai.arrival_id = ga.id AND ai.purchase_item_id = pi.id
               WHERE pi.purchase_id = ?
            ORDER BY pi.sort_order, pi.id",
             [$purchaseId]

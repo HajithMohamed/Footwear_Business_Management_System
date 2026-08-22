@@ -18,9 +18,23 @@ class Product extends Model
     public function paginate(array $filters = [], int $page = 1, int $perPage = 20): array
     {
         [$where, $params] = $this->buildFilters($filters);
+        $groups = "(
+            SELECT MIN(g.id) AS base_id,
+                   GROUP_CONCAT(g.id ORDER BY g.id) AS product_ids,
+                   SUM(g.stock_sets) AS grouped_stock_sets
+              FROM products g
+             WHERE g.deleted_at IS NULL
+          GROUP BY COALESCE(NULLIF(REGEXP_REPLACE(LOWER(TRIM(g.art_no)), '[^a-z0-9]', ''), ''), CONCAT('__product_', g.id)),
+                   COALESCE(g.category_id, 0)
+        ) pg";
 
         $total = (int) $this->db()->scalar(
-            "SELECT COUNT(*) FROM products p WHERE {$where}",
+            "SELECT COUNT(*)
+               FROM products p
+               JOIN {$groups} ON pg.base_id = p.id
+          LEFT JOIN brands b ON b.id = p.brand_id
+          LEFT JOIN categories c ON c.id = p.category_id
+              WHERE {$where}",
             $params
         );
 
@@ -29,13 +43,27 @@ class Product extends Model
 
         $rows = $this->db()->all(
             "SELECT p.*,
+                    pg.grouped_stock_sets AS stock_sets,
+                    pg.product_ids AS grouped_product_ids,
                     b.name AS brand_name,
                     c.name AS category_name,
                     ss.label AS size_set_label,
                     (SELECT thumb_path FROM product_images pi
-                      WHERE pi.product_id = p.id
-                   ORDER BY pi.is_main DESC, pi.sort_order, pi.id LIMIT 1) AS main_thumb
+                      WHERE FIND_IN_SET(pi.product_id, pg.product_ids)
+                   ORDER BY pi.is_main DESC, pi.sort_order, pi.id LIMIT 1) AS main_thumb,
+                    (SELECT GROUP_CONCAT(DISTINCT pi2.colour ORDER BY pi2.colour SEPARATOR ', ')
+                       FROM product_images pi2
+                      WHERE FIND_IN_SET(pi2.product_id, pg.product_ids) AND pi2.colour IS NOT NULL AND pi2.colour <> '') AS image_colours,
+                    (SELECT GROUP_CONCAT(DISTINCT pitem2.colour ORDER BY pitem2.colour SEPARATOR ', ')
+                       FROM purchase_items pitem2
+                      WHERE FIND_IN_SET(pitem2.product_id, pg.product_ids) AND pitem2.colour IS NOT NULL AND pitem2.colour <> '') AS variant_colours,
+                    (SELECT pur.purchase_number
+                       FROM purchase_items pitem
+                       JOIN purchases pur ON pur.id = pitem.purchase_id
+                      WHERE FIND_IN_SET(pitem.product_id, pg.product_ids)
+                   ORDER BY pur.purchase_date DESC, pur.id DESC LIMIT 1) AS latest_purchase_number
                FROM products p
+               JOIN {$groups} ON pg.base_id = p.id
           LEFT JOIN brands b      ON b.id = p.brand_id
           LEFT JOIN categories c  ON c.id = p.category_id
           LEFT JOIN size_sets ss  ON ss.id = p.size_set_id
@@ -60,9 +88,11 @@ class Product extends Model
         $params = [];
 
         if (!empty($filters['search'])) {
-            $conditions[] = '(p.art_no LIKE ? OR p.name LIKE ? OR b.name LIKE ?)';
+            $conditions[] = '(p.art_no LIKE ? OR p.name LIKE ? OR b.name LIKE ? OR c.name LIKE ?
+                OR EXISTS (SELECT 1 FROM purchase_items search_item
+                            WHERE search_item.product_id = p.id AND search_item.colour LIKE ?))';
             $like = '%' . $filters['search'] . '%';
-            array_push($params, $like, $like, $like);
+            array_push($params, $like, $like, $like, $like, $like);
         }
         if (!empty($filters['type']) && in_array($filters['type'], ['imported', 'local', 'custom'], true)) {
             $conditions[] = 'p.type = ?';
@@ -77,9 +107,9 @@ class Product extends Model
             $params[] = (int) $filters['category_id'];
         }
         if (($filters['stock'] ?? '') === 'out') {
-            $conditions[] = 'p.stock_sets <= 0';
+            $conditions[] = 'pg.grouped_stock_sets <= 0';
         } elseif (($filters['stock'] ?? '') === 'low') {
-            $conditions[] = 'p.stock_sets > 0 AND p.stock_sets <= p.low_stock_threshold';
+            $conditions[] = 'pg.grouped_stock_sets > 0 AND pg.grouped_stock_sets <= p.low_stock_threshold';
         }
 
         return [implode(' AND ', $conditions), $params];

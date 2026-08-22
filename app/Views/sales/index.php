@@ -12,8 +12,6 @@ $qs = function (array $overrides) use ($filters): string {
     <h1 class="text-lg font-bold text-slate-800">Sales</h1>
     <p class="text-sm text-slate-500">Every invoice, cash or credit</p>
   </div>
-  <a href="<?= e(url('sales/create')) ?>"
-     class="shrink-0 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white">➕ New</a>
 </div>
 
 <!-- Period totals -->
@@ -147,8 +145,8 @@ $qs = function (array $overrides) use ($filters): string {
 <?php else: ?>
   <div class="mt-4 rounded-2xl bg-white p-8 text-center shadow-sm ring-1 ring-slate-100">
     <p class="mb-4 text-slate-500">No invoices match this view.</p>
-    <a href="<?= e(url('sales/create')) ?>" class="inline-block rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white">
-      ➕ Record a sale
+    <a href="<?= e(url('bills')) ?>" class="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white">
+      <?= ui_icon('bill', 'h-4 w-4') ?> Add customer bill
     </a>
   </div>
 <?php endif; ?>

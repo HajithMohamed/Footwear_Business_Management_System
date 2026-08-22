@@ -49,20 +49,16 @@
     <div class="space-y-2 text-xs">
       <div class="flex items-start justify-between gap-3">
         <span class="text-slate-600">
-          <span class="font-medium text-slate-800">Clearance rate</span> — priced into each pair above
+          <span class="font-bold text-brand-700">Clearance rate (Used for Costing)</span> — priced into each pair below
         </span>
-        <span class="shrink-0 font-semibold text-slate-800"><?= number_format((float) $rates['per_kilo_clearance'], 2) ?>/kg</span>
+        <span class="shrink-0 font-bold text-brand-700"><?= number_format((float) $rates['per_kilo_clearance'], 2) ?>/kg</span>
       </div>
       <div class="flex items-start justify-between gap-3">
-        <span class="text-slate-600">
-          <span class="font-medium text-slate-800">Agent wage</span> — what you actually pay the clearance agents;
-          an expense, <em>not</em> used in the pricing above
+        <span class="text-slate-500">
+          <span class="font-medium text-slate-700">Agent wage (Actual Paid)</span> — what you pay the clearance agents;
+          <em>not</em> used in the pricing
         </span>
-        <span class="shrink-0 font-semibold text-slate-800"><?= number_format($agentWage['per_kg'], 2) ?>/kg</span>
-      </div>
-      <div class="flex items-center justify-between border-t border-slate-200 pt-2 text-slate-500">
-        <span>Agent wage on this shipment</span>
-        <span class="font-semibold"><?= money($agentWage['cost']) ?> for <?= number_format($agentWage['weight'], 2) ?> kg</span>
+        <span class="shrink-0 font-semibold text-slate-700"><?= number_format($agentWage['per_kg'], 2) ?>/kg</span>
       </div>
     </div>
   </div>
@@ -74,8 +70,8 @@
       <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 <?= $line['ready'] ? 'ring-slate-100' : 'ring-amber-200' ?>">
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0">
-            <p class="truncate text-sm font-semibold text-slate-800"><?= e($line['label']) ?></p>
-            <p class="text-[11px] text-slate-500">
+            <p class="truncate text-base font-bold text-slate-800"><?= e($line['label']) ?></p>
+            <p class="text-xs text-slate-500 mt-0.5">
               <?= e($line['colour'] ?: '—') ?> · <?= e($line['size_set_label'] ?: '—') ?>
               · <?= (int) $line['received_pairs'] ?> pairs received
             </p>
@@ -87,58 +83,62 @@
           <?php endif; ?>
         </div>
 
-        <div class="mt-3 grid grid-cols-3 gap-2">
+        <div class="mt-4 grid grid-cols-3 gap-3">
           <div>
-            <label class="block text-[10px] font-medium text-slate-400 mb-1">Set weight (g)</label>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">Set weight (g)</label>
             <input name="set_weight_grams[<?= (int) $line['id'] ?>]" type="number" min="0"
                    value="<?= $line['set_weight_grams'] ?: '' ?>"
-                   class="w-full rounded-lg px-2.5 py-1.5 text-sm ring-1 <?= $line['set_weight_grams'] > 0 ? 'ring-slate-200' : 'ring-amber-300' ?>">
+                   class="w-full rounded-xl px-3 py-2 text-sm ring-1 shadow-sm focus:ring-brand-500 <?= $line['set_weight_grams'] > 0 ? 'ring-slate-200' : 'ring-amber-300' ?>">
           </div>
           <div>
-            <label class="block text-[10px] font-medium text-slate-400 mb-1">Indian Price</label>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">Indian Price</label>
             <input name="indian_price[<?= (int) $line['id'] ?>]" type="number" step="0.01" min="0" required
                    value="<?= $line['indian_price'] ?: '' ?>"
-                   class="w-full rounded-lg px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
+                   class="w-full rounded-xl px-3 py-2 text-sm ring-1 shadow-sm ring-slate-200 focus:ring-brand-500">
           </div>
           <div>
-            <label class="block text-[10px] font-medium text-slate-400 mb-1">Discount %</label>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-1">Discount %</label>
             <input name="discount_percent[<?= (int) $line['id'] ?>]" type="number" step="0.01" min="0"
                    value="<?= $line['discount_percent'] ?: '' ?>"
-                   class="w-full rounded-lg px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
+                   class="w-full rounded-xl px-3 py-2 text-sm ring-1 shadow-sm ring-slate-200 focus:ring-brand-500">
           </div>
         </div>
-        <div class="mt-2">
-          <label class="block text-[10px] font-medium text-slate-400 mb-1">Upload Product Image (optional)</label>
-          <input type="file" name="line_images[<?= (int) $line['id'] ?>]" accept="image/jpeg,image/png,image/webp" class="block w-full text-xs text-slate-500 file:mr-2 file:rounded-full file:border-0 file:bg-brand-50 file:px-3 file:py-1 file:text-[10px] file:font-semibold file:text-brand-700 hover:file:bg-brand-100">
+
+        <!-- Image Upload -->
+        <div class="mt-4 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200 border-l-4 <?= empty($line['product_thumb']) ? 'border-amber-400' : 'border-green-400' ?>">
+          <div class="flex items-center justify-between mb-2">
+            <label class="block text-xs font-bold text-slate-700">Product Image</label>
+            <?php if (empty($line['product_thumb'])): ?>
+              <span class="rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">Missing Image</span>
+            <?php else: ?>
+              <span class="rounded-md bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700">Image Added</span>
+            <?php endif; ?>
+          </div>
+          <input type="file" name="line_images[<?= (int) $line['id'] ?>]" accept="image/jpeg,image/png,image/webp" class="block w-full text-xs text-slate-500 file:mr-2 file:rounded-xl file:border-0 file:bg-brand-100 file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-brand-700 hover:file:bg-brand-200 cursor-pointer">
         </div>
 
         <?php if ($line['ready']): ?>
-          <div class="mt-3 rounded-xl bg-slate-50 p-3">
-            <div class="space-y-1 text-[11px] text-slate-600">
-              <div class="flex justify-between">
-                <span><?= number_format($line['set_weight_grams']) ?> g ÷ <?= (int) $line['pairs_in_set'] ?> pairs</span>
-                <span><?= number_format($c['weight_per_pair'], 1) ?> g/pair · <?= number_format($c['pairs_per_kilo'], 2) ?> pairs/kg</span>
-              </div>
-              <div class="flex justify-between">
-                <span>Indian cost <?= $line['discount_percent'] > 0 ? '(less ' . rtrim(rtrim(number_format($line['discount_percent'], 2), '0'), '.') . '%)' : '' ?></span>
-                <span><?= number_format($c['indian_cost_raw'], 2) ?> → <?= number_format($c['indian_cost_lkr']) ?></span>
-              </div>
-              <div class="flex justify-between">
-                <span>Clearance share</span>
-                <span><?= number_format($c['clearance_raw'], 2) ?> → <?= number_format($c['clearance_per_pair']) ?></span>
-              </div>
-              <div class="flex justify-between">
-                <span>Handling</span>
-                <span><?= number_format($c['handling_charge'], 2) ?></span>
-              </div>
+          <div class="mt-4 rounded-xl bg-slate-800 p-4 shadow-sm text-white">
+            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-3">Cost Breakdown</p>
+            <div class="flex items-center justify-between text-sm mb-2">
+              <span class="text-slate-300">Indian Cost</span>
+              <span class="font-medium text-slate-100"><?= number_format($c['indian_cost_lkr']) ?> LKR</span>
             </div>
-            <div class="mt-2 flex items-center justify-between border-t border-slate-200 pt-2">
-              <span class="text-xs font-semibold text-slate-700">Landed cost per pair</span>
-              <span class="text-base font-bold text-brand-600"><?= money($c['final_cost']) ?></span>
+            <div class="flex items-center justify-between text-sm mb-2">
+              <span class="text-slate-300">Clearance Share</span>
+              <span class="font-medium text-slate-100">+ <?= number_format($c['clearance_per_pair']) ?></span>
+            </div>
+            <div class="flex items-center justify-between text-sm mb-4">
+              <span class="text-slate-300">Handling</span>
+              <span class="font-medium text-slate-100">+ <?= number_format($c['handling_charge']) ?></span>
+            </div>
+            <div class="flex items-center justify-between border-t border-slate-600 pt-3">
+              <span class="text-xs font-bold text-white uppercase tracking-wide">Final Landed Cost</span>
+              <span class="text-xl font-bold text-brand-300"><?= money($c['final_cost']) ?></span>
             </div>
           </div>
         <?php else: ?>
-          <p class="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+          <p class="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 border border-amber-200">
             ⚠ Needs a set weight, pairs per set and an Indian price before this line can be costed.
             <?php if (!$line['pairs_in_set']): ?><br>Pairs per set is missing on this line.<?php endif; ?>
           </p>
@@ -153,29 +153,31 @@
     <?php endif; ?>
   </div>
 
-  <!-- Summary -->
-  <div class="rounded-2xl bg-slate-800 p-4 text-white">
-    <div class="flex items-center justify-between text-sm">
-      <span>Ready to cost</span>
-      <span class="font-semibold"><?= (int) $summary['ready'] ?> of <?= count($lines) ?> lines</span>
-    </div>
-    <div class="mt-1 flex items-center justify-between text-sm">
-      <span>Total landed value</span>
-      <span class="font-semibold"><?= money($summary['value']) ?> <span class="text-xs font-normal text-white/60">(<?= (int) $summary['pairs'] ?> pairs)</span></span>
-    </div>
-  </div>
+  <!-- Sticky Action Bar -->
+  <div class="sticky-action-bar">
+    <div class="action-container flex-col">
+      <!-- Summary -->
+      <div class="rounded-xl bg-slate-800 p-3 text-white mb-2 shadow-sm w-full">
+        <div class="flex items-center justify-between text-xs">
+          <span class="text-slate-300">Ready to cost</span>
+          <span class="font-bold text-white"><?= (int) $summary['ready'] ?> of <?= count($lines) ?> lines</span>
+        </div>
+        <div class="mt-1 flex items-center justify-between text-sm">
+          <span class="text-slate-300">Total landed value</span>
+          <span class="font-bold text-brand-300"><?= money($summary['value']) ?> <span class="text-xs font-normal text-white/60">(<?= (int) $summary['pairs'] ?> pairs)</span></span>
+        </div>
+      </div>
 
-  <div class="flex gap-2">
-    <button name="mode" value="preview"
-            class="flex-1 rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200">
-      Recalculate
-    </button>
-    <button name="mode" value="apply" <?= $summary['ready'] === 0 ? 'disabled' : '' ?>
-            class="flex-[2] rounded-xl px-4 py-3 text-sm font-semibold text-white shadow-sm <?= $summary['ready'] === 0 ? 'cursor-not-allowed bg-slate-300' : 'bg-brand-600 active:scale-[.99]' ?>">
-      Apply to <?= (int) $summary['ready'] ?> product<?= $summary['ready'] === 1 ? '' : 's' ?>
-    </button>
+      <div class="flex gap-2 w-full">
+        <button name="mode" value="preview"
+                class="flex-1 rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200">
+          Recalculate
+        </button>
+        <button name="mode" value="apply" <?= $summary['ready'] === 0 ? 'disabled' : '' ?>
+                class="flex-[2] rounded-xl px-4 py-3 text-sm font-semibold text-white shadow-sm <?= $summary['ready'] === 0 ? 'cursor-not-allowed bg-slate-300' : 'bg-brand-600 active:scale-[.99]' ?>">
+          Apply to <?= (int) $summary['ready'] ?> product<?= $summary['ready'] === 1 ? '' : 's' ?>
+        </button>
+      </div>
+    </div>
   </div>
-  <p class="pb-2 text-center text-xs text-slate-400">
-    Recalculate is safe to press as often as you like — only Apply writes to your products.
-  </p>
 </form>

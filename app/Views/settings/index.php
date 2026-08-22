@@ -1,9 +1,9 @@
 <?php
 $groupTitles = [
-    'cost'    => ['💰 Cost & pricing', 'Used by the cost calculator and imported products.'],
-    'stock'   => ['📦 Stock', 'Inventory thresholds.'],
-    'cleanup' => ['🧹 Data cleanup (retention)', 'Used by the automatic cleanup job (Phase 5).'],
-    'general' => ['⚙️ General', ''],
+    'cost'    => ['Cost & pricing', 'Used by the cost calculator and imported products.'],
+    'stock'   => ['Stock', 'Inventory thresholds.'],
+    'cleanup' => ['Data cleanup (retention)', 'Used by the automatic cleanup job (Phase 5).'],
+    'general' => ['General', ''],
 ];
 ?>
 <div class="mb-4">
@@ -41,7 +41,7 @@ $groupTitles = [
   <!-- Brand discount rules (read-only for now) -->
   <section class="rounded-2xl bg-white shadow-sm ring-1 ring-slate-100 overflow-hidden">
     <div class="px-4 py-3 border-b border-slate-100">
-      <h2 class="text-sm font-semibold text-slate-700">🏷️ Brand discounts</h2>
+      <h2 class="text-sm font-semibold text-slate-700">Brand discounts</h2>
       <p class="text-xs text-slate-400">Applied automatically in the cost calculation. Full management arrives with the product module.</p>
     </div>
     <div class="p-4">

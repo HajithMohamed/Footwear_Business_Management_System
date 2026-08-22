@@ -28,8 +28,17 @@ class Customer extends Model
         }
         if (!empty($filters['search'])) {
             $search = '%' . $filters['search'] . '%';
-            $query .= ' AND (c.name LIKE ? OR c.phone LIKE ? OR c.email LIKE ? OR c.city LIKE ?)';
-            $params = array_merge($params, [$search, $search, $search, $search]);
+            $digits = preg_replace('/\D+/', '', (string) $filters['search']);
+            $phoneSearch = $search;
+            if ($digits !== '') {
+                if (str_starts_with($digits, '0')) {
+                    $phoneSearch = '%+94' . substr($digits, 1) . '%';
+                } elseif (str_starts_with($digits, '94')) {
+                    $phoneSearch = '%+' . $digits . '%';
+                }
+            }
+            $query .= ' AND (c.name LIKE ? OR c.phone LIKE ? OR c.phone LIKE ? OR c.email LIKE ? OR c.city LIKE ?)';
+            $params = array_merge($params, [$search, $search, $phoneSearch, $search, $search]);
         }
 
         if (($filters['status'] ?? '') === 'deleted') {
@@ -54,7 +63,9 @@ class Customer extends Model
                     $query .= ' AND (c.outstanding_due = 0 OR DATEDIFF(NOW(), i.oldest_unpaid_date) <= 0) AND i.last_purchase_date IS NOT NULL';
                     break;
                 case 'inactive':
-                    $query .= ' AND (i.last_purchase_date IS NULL OR DATEDIFF(NOW(), i.last_purchase_date) > 60)';
+                    // A new customer is available and active as a record; "Dormant"
+                    // is reserved for someone who bought before but not recently.
+                    $query .= ' AND i.last_purchase_date IS NOT NULL AND DATEDIFF(NOW(), i.last_purchase_date) > 60';
                     break;
             }
         }

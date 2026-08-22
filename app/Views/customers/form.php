@@ -7,7 +7,7 @@
   </div>
 </div>
 
-<form method="post" action="<?= e(url($customer ? "customers/{$customer['id']}" : 'customers')) ?>" class="pb-24">
+<form method="post" action="<?= e(url($customer ? "customers/{$customer['id']}" : 'customers')) ?>" class="pb-40 md:pb-24">
   <?= csrf_field() ?>
 
   <!-- Basic Information -->
@@ -17,15 +17,17 @@
     <div class="space-y-4">
       <div>
         <label class="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wide">Shop / Customer Name <span class="text-red-500">*</span></label>
-        <input type="text" name="name" required value="<?= e($customer['name'] ?? '') ?>" placeholder="e.g. ABC Footwear"
+        <input type="text" name="name" required value="<?= e(old('name', $customer['name'] ?? '')) ?>" placeholder="e.g. ABC Footwear"
                class="w-full rounded-xl border-0 bg-slate-50 px-4 py-3 text-sm ring-1 ring-slate-200 focus:bg-white focus:ring-2 focus:ring-brand-600 transition">
       </div>
 
       <div class="grid grid-cols-2 gap-3">
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wide">Mobile / WhatsApp</label>
-          <input type="tel" name="phone" value="<?= e($customer['phone'] ?? '') ?>" placeholder="07XXXXXXXX"
+          <input type="tel" name="phone" value="<?= e(old('phone', $customer['phone'] ?? '')) ?>" placeholder="+94 77 123 4567" inputmode="tel"
                  class="w-full rounded-xl border-0 bg-slate-50 px-4 py-3 text-sm ring-1 ring-slate-200 focus:bg-white focus:ring-2 focus:ring-brand-600 transition">
+          <p class="mt-1 text-[10px] text-slate-400">Local numbers are saved automatically with Sri Lankan country code +94.</p>
+          <?php if ($msg = error('phone')): ?><p class="mt-1 text-xs text-red-600"><?= e($msg) ?></p><?php endif; ?>
         </div>
         <div>
           <label class="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wide">Email</label>
@@ -117,7 +119,7 @@
   <?php endif; ?>
 
   <!-- Sticky Action Bar -->
-  <div class="fixed bottom-0 left-0 right-0 sm:left-64 z-40 bg-white border-t border-slate-200 p-4 shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
+  <div class="fixed bottom-[69px] left-0 right-0 md:bottom-0 md:left-64 z-40 bg-white border-t border-slate-200 p-4 shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
     <div class="max-w-3xl mx-auto flex gap-3">
       <a href="<?= e(url($customer ? "customers/{$customer['id']}" : 'customers')) ?>" 
          class="flex-1 flex justify-center items-center h-12 rounded-xl bg-slate-100 text-slate-600 font-bold active:scale-95 transition">

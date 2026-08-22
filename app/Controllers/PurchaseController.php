@@ -8,6 +8,7 @@ use App\Core\Database;
 use App\Core\Request;
 use App\Core\Session;
 use App\Models\Brand;
+use App\Models\Category;
 use App\Models\ClearancePerson;
 use App\Models\Parcel;
 use App\Models\Purchase;
@@ -68,16 +69,23 @@ class PurchaseController extends Controller
             'parcelSummary'    => (new Parcel())->summary((int) $purchase['id']),
             'clearancePersons' => (new ClearancePerson())->active(),
             'arrival'          => (new \App\Models\GoodsArrival())->byPurchase((int) $purchase['id']),
+            'supplierBills'    => $this->purchases->billsForSupplier(
+                (string) $purchase['supplier_name'],
+                (int) $purchase['id']
+            ),
         ]);
     }
 
     /** Manual entry (Method 4) — the verification screen with nothing pre-filled. */
     public function create(Request $request): void
     {
+        $supplier = trim((string) $request->query('supplier', ''));
+        $draft = $this->blankDraft();
+        $draft['supplier_name'] = $supplier;
         $this->renderForm([
             'title'      => 'New Purchase',
             'extraction' => null,
-            'draft'      => $this->blankDraft(),
+            'draft'      => $draft,
         ]);
     }
 
@@ -115,11 +123,14 @@ class PurchaseController extends Controller
 
         $input = $request->all();
         $supplier = trim((string) ($input['supplier_name'] ?? ''));
-        $lines = $this->collectItems($input);
-        if ($supplier === '' || !$lines) {
+        $selectionErrors = $this->itemSelectionErrors($input);
+        $lines = $selectionErrors ? [] : $this->collectItems($input);
+        if ($supplier === '' || (float) ($input['total_weight_kg'] ?? 0) <= 0 || !$lines || $selectionErrors) {
             $errors = [];
             if ($supplier === '') $errors['supplier_name'] = ['Supplier name is required.'];
-            if (!$lines) $errors['items'] = ['Add at least one product line.'];
+            if ((float) ($input['total_weight_kg'] ?? 0) <= 0) $errors['total_weight_kg'] = ['Enter the client-supplied total shipment weight.'];
+            if ($selectionErrors) $errors['items'] = $selectionErrors;
+            elseif (!$lines) $errors['items'] = ['Add at least one product line.'];
             $this->withErrors($errors, $input);
         }
 
@@ -132,7 +143,7 @@ class PurchaseController extends Controller
                 'expected_arrival_date' => $this->dateOrNull($input['expected_arrival_date'] ?? ''),
                 'total_invoice_value'   => max(0, (float) ($input['total_invoice_value'] ?? 0)),
                 'total_weight_kg'       => max(0, (float) ($input['total_weight_kg'] ?? 0)),
-                'expected_parcels'      => max(0, (int) ($input['expected_parcels'] ?? 0)),
+                'expected_parcels'      => 0,
                 'notes'                 => trim((string) ($input['notes'] ?? '')) ?: null,
             ]);
             $this->items->deleteByPurchase($purchaseId);
@@ -174,6 +185,7 @@ class PurchaseController extends Controller
         $this->view('purchases/import', [
             'title'            => 'Import Supplier Invoice',
             'extractionOnline' => $extractor->isEnabled(),
+            'supplierName'     => trim((string) $request->query('supplier', '')),
         ]);
     }
 
@@ -223,13 +235,15 @@ class PurchaseController extends Controller
         }
 
         $draft = $this->blankDraft();
+        $supplierHint = trim((string) $request->input('supplier_hint', ''));
+        $draft['supplier_name'] = $supplierHint;
         $draft['invoice_type']  = $this->invoiceTypeFor($declaredType, $stored['mime_type']);
         $draft['attachment_id'] = $attachmentId;
 
         if ($result['ok']) {
             $data  = $result['data'];
             $draft = array_merge($draft, [
-                'supplier_name'       => $data['supplier_name'],
+                'supplier_name'       => $data['supplier_name'] ?: $supplierHint,
                 'supplier_invoice_no' => $data['supplier_invoice_no'],
                 'invoice_date'        => $data['invoice_date'],
                 'total_invoice_value' => $data['total_invoice_value'] ?: '',
@@ -255,25 +269,28 @@ class PurchaseController extends Controller
     {
         $input  = $request->all();
         $errors = [];
+        $asDraft = (string) ($input['save_mode'] ?? '') === 'draft';
 
         $supplier = trim((string) ($input['supplier_name'] ?? ''));
         if ($supplier === '') {
             $errors['supplier_name'] = ['Supplier name is required.'];
+        }
+        if (!$asDraft && (float) ($input['total_weight_kg'] ?? 0) <= 0) {
+            $errors['total_weight_kg'] = ['Enter the client-supplied total shipment weight.'];
         }
         $purchaseDate = trim((string) ($input['purchase_date'] ?? ''));
         if ($purchaseDate === '') {
             $purchaseDate = date('Y-m-d');
         }
 
-        $lines = $this->collectItems($input);
+        $selectionErrors = $asDraft ? [] : $this->itemSelectionErrors($input);
+        $lines = $selectionErrors ? [] : $this->collectItems($input);
         if (!$lines) {
-            $errors['items'] = ['Add at least one product line.'];
+            $errors['items'] = $selectionErrors ?: ['Add at least one product line.'];
         }
         if ($errors) {
             $this->withErrors($errors, $input);
         }
-
-        $asDraft = (string) ($input['save_mode'] ?? '') === 'draft';
 
         $purchaseId = $this->purchases->create([
             'purchase_number'       => $this->purchases->nextNumber(),
@@ -285,7 +302,7 @@ class PurchaseController extends Controller
             'expected_arrival_date' => $this->dateOrNull($input['expected_arrival_date'] ?? ''),
             'total_invoice_value'   => (float) ($input['total_invoice_value'] ?? 0),
             'total_weight_kg'       => (float) ($input['total_weight_kg'] ?? 0),
-            'expected_parcels'      => max(0, (int) ($input['expected_parcels'] ?? 0)),
+            'expected_parcels'      => 0,
             'notes'                 => trim((string) ($input['notes'] ?? '')) ?: null,
             'status'                => $asDraft ? 'draft' : 'awaiting_clearance',
             'extraction_confirmed'  => !empty($input['attachment_id']) ? 1 : 0,
@@ -322,6 +339,7 @@ class PurchaseController extends Controller
             'brands'           => (new Brand())->active(),
             'clearancePersons' => (new ClearancePerson())->active(),
             'sizeSets'         => (new SizeSet())->active(),
+            'categories'       => (new Category())->active(),
             'artNos'           => (new Product())->distinctArtNumbers(),
             'colours'          => (new Product())->distinctColours(),
             'formAction'       => 'purchases',
@@ -367,10 +385,17 @@ class PurchaseController extends Controller
     /** Build item rows from the parallel form arrays, skipping blank lines. */
     private function collectItems(array $input): array
     {
+        $brandIds   = $input['item_brand_id']       ?? [];
         $brandNames = $input['item_brand_name']     ?? [];
+        $newBrands  = $input['item_new_brand']      ?? [];
         $artNos     = $input['item_art_no']         ?? [];
         $colours    = $input['item_colour']         ?? [];
         $sizeSets   = $input['item_size_set_label'] ?? [];
+        $sizeSetIds = $input['item_size_set_id']    ?? [];
+        $categoryIds = $input['item_category_id']   ?? [];
+        $newCategories = $input['item_new_category'] ?? [];
+        $newSizeSets = $input['item_new_size_set']  ?? [];
+        $newSizePairs = $input['item_new_size_pairs'] ?? [];
         $perSet     = $input['item_pairs_per_set']  ?? [];
         $sets       = $input['item_quantity_sets']  ?? [];
         $pairs      = $input['item_quantity_pairs'] ?? [];
@@ -378,23 +403,50 @@ class PurchaseController extends Controller
         $totals     = $input['item_line_total']     ?? [];
 
         $rows = [];
-        foreach ($brandNames as $i => $brandName) {
-            $brandName = trim((string) $brandName);
+        $rowCount = max(count($artNos), count($brandIds), count($pairs));
+        for ($i = 0; $i < $rowCount; $i++) {
             $artNo     = trim((string) ($artNos[$i] ?? ''));
             $qtyPairs  = (int) ($pairs[$i] ?? 0);
             $qtySets   = (int) ($sets[$i] ?? 0);
+            $brandId = ctype_digit((string) ($brandIds[$i] ?? '')) ? (int) $brandIds[$i] : 0;
+            $brand = $brandId > 0 ? (new Brand())->find($brandId) : null;
+            if (!$brand && trim((string) ($newBrands[$i] ?? '')) !== '') {
+                $brandId = (new Brand())->findOrCreate((string) $newBrands[$i], 'imported');
+                $brand = (new Brand())->find($brandId);
+            }
+            $brandName = trim((string) ($brand['name'] ?? $brandNames[$i] ?? ''));
+
+            $sizeSetId = ctype_digit((string) ($sizeSetIds[$i] ?? '')) ? (int) $sizeSetIds[$i] : null;
+            $sizeSet = $sizeSetId ? (new SizeSet())->find($sizeSetId) : null;
+            $categoryId = ctype_digit((string) ($categoryIds[$i] ?? '')) ? (int) $categoryIds[$i] : null;
+            if (!$categoryId && trim((string) ($newCategories[$i] ?? '')) !== '') {
+                $categoryId = (new Category())->findOrCreate((string) $newCategories[$i]);
+            }
+            if ($sizeSet && !empty($sizeSet['category_id'])) {
+                $categoryId = (int) $sizeSet['category_id'];
+            }
+            if (!$sizeSet && $categoryId && trim((string) ($newSizeSets[$i] ?? '')) !== '') {
+                $sizeSetId = (new SizeSet())->findOrCreate(
+                    (string) $newSizeSets[$i],
+                    $categoryId,
+                    max(0, (int) ($newSizePairs[$i] ?? 0)) ?: null
+                );
+                $sizeSet = (new SizeSet())->find($sizeSetId);
+            }
 
             if ($brandName === '' && $artNo === '' && $qtyPairs === 0 && $qtySets === 0) {
                 continue;
             }
 
             $rows[] = [
-                'brand_id'       => $brandName !== '' ? ((new Brand())->findOrCreate($brandName, 'imported') ?: null) : null,
+                'brand_id'       => $brandId ?: null,
                 'brand_name'     => $brandName ?: null,
                 'art_no'         => $artNo ?: null,
                 'colour'         => trim((string) ($colours[$i] ?? '')) ?: null,
-                'size_set_label' => trim((string) ($sizeSets[$i] ?? '')) ?: null,
-                'pairs_per_set'  => ((int) ($perSet[$i] ?? 0)) ?: null,
+                'category_id'    => $categoryId,
+                'size_set_id'    => $sizeSetId,
+                'size_set_label' => $sizeSet ? $sizeSet['label'] : (trim((string) ($sizeSets[$i] ?? '')) ?: null),
+                'pairs_per_set'  => ((int) ($perSet[$i] ?? 0)) ?: ($sizeSet ? (int) $sizeSet['default_pairs'] : null),
                 'quantity_sets'  => $qtySets,
                 'quantity_pairs' => $qtyPairs,
                 'unit_price'     => ((float) ($rates[$i] ?? 0)) ?: null,
@@ -402,6 +454,39 @@ class PurchaseController extends Controller
             ];
         }
         return $rows;
+    }
+
+    /** Required catalogue choices for every non-blank confirmed product row. */
+    private function itemSelectionErrors(array $input): array
+    {
+        $artNos = $input['item_art_no'] ?? [];
+        $pairs = $input['item_quantity_pairs'] ?? [];
+        $errors = [];
+
+        foreach ($artNos as $i => $artNoRaw) {
+            $artNo = trim((string) $artNoRaw);
+            $pairCount = (int) ($pairs[$i] ?? 0);
+            if ($artNo === '' && $pairCount === 0) continue;
+            $line = $i + 1;
+
+            $brandChoice = (string) (($input['item_brand_id'][$i] ?? ''));
+            $newBrand = trim((string) ($input['item_new_brand'][$i] ?? ''));
+            if (!ctype_digit($brandChoice) && $newBrand === '') {
+                $errors[] = "Line {$line}: choose a brand or add a new brand.";
+            }
+
+            $categoryChoice = (string) (($input['item_category_id'][$i] ?? ''));
+            $newCategory = trim((string) ($input['item_new_category'][$i] ?? ''));
+            $sizeChoice = (string) (($input['item_size_set_id'][$i] ?? ''));
+            $newSize = trim((string) ($input['item_new_size_set'][$i] ?? ''));
+            if (!ctype_digit($categoryChoice) && $newCategory === '' && !ctype_digit($sizeChoice)) {
+                $errors[] = "Line {$line}: choose or add a category.";
+            }
+            if (!ctype_digit($sizeChoice) && $newSize === '') {
+                $errors[] = "Line {$line}: choose a size set or add the new size set.";
+            }
+        }
+        return $errors;
     }
 
     private function collectAttachmentTypes(): array

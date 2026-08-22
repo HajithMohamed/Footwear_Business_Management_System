@@ -6,6 +6,7 @@ use App\Models\Customer;
 use App\Models\CustomerIntelligence;
 use App\Models\CustomerTransaction;
 use App\Core\Controller;
+use App\Core\Database;
 use App\Core\Request;
 use App\Core\Session;
 use App\Core\Auth;
@@ -17,7 +18,8 @@ class CustomerController extends Controller
         $filters = [
             'type' => $request->query('type', ''),
             'region' => $request->query('region', ''),
-            'search' => $request->query('search', '')
+            'search' => $request->query('search', ''),
+            'status' => $request->query('status', ''),
         ];
 
         $model = new Customer();
@@ -41,9 +43,10 @@ class CustomerController extends Controller
 
     public function store(Request $request): void
     {
+        $phone = $this->phone($request);
         $data = [
-            'name' => $request->input('name') ?: throw new \Exception('Name is required'),
-            'phone' => $request->input('phone'),
+            'name' => trim((string) $request->input('name')) ?: throw new \Exception('Name is required'),
+            'phone' => $phone,
             'email' => $request->input('email'),
             'address' => $request->input('address'),
             'city' => $request->input('city'),
@@ -145,9 +148,10 @@ class CustomerController extends Controller
     public function update(Request $request, array $params): void
     {
         $id = (int) $params['id'];
+        $phone = $this->phone($request);
         $data = [
-            'name' => $request->input('name') ?: throw new \Exception('Name is required'),
-            'phone' => $request->input('phone'),
+            'name' => trim((string) $request->input('name')) ?: throw new \Exception('Name is required'),
+            'phone' => $phone,
             'email' => $request->input('email'),
             'address' => $request->input('address'),
             'city' => $request->input('city'),
@@ -160,8 +164,60 @@ class CustomerController extends Controller
         $model = new Customer();
         $model->updateCustomer($id, $data);
 
-        Session::flashSuccess('Customer updated successfully.');
+        Session::flash('success', 'Customer updated successfully.');
         $this->redirect("/customers/$id");
+    }
+
+    /** Add a carried-forward debt without inventing a bill or rewriting history. */
+    public function addOutstanding(Request $request, array $params): void
+    {
+        $id = (int) $params['id'];
+        $model = new Customer();
+        if (!$model->getById($id)) {
+            $this->abort(404, 'Customer not found');
+        }
+
+        $amount = round((float) $request->input('amount'), 2);
+        $date = trim((string) $request->input('transaction_date'));
+        $description = trim((string) $request->input('description'));
+        if ($amount <= 0) {
+            Session::flash('error', 'Enter an outstanding amount greater than zero.');
+            $this->redirect("customers/{$id}");
+        }
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            $date = date('Y-m-d');
+        }
+
+        $transactionId = Database::instance()->transaction(function () use ($id, $amount, $date, $description, $model): int {
+            $locked = Database::instance()->first(
+                'SELECT outstanding_due FROM customers WHERE id = ? FOR UPDATE',
+                [$id]
+            );
+            if (!$locked) {
+                throw new \RuntimeException('Customer is no longer available.');
+            }
+            $newBalance = round((float) $locked['outstanding_due'] + $amount, 2);
+            $transactionId = (new CustomerTransaction())->create([
+                'customer_id'      => $id,
+                'transaction_type' => 'adjustment',
+                'amount'           => $amount,
+                'running_balance'  => $newBalance,
+                'transaction_date' => $date,
+                'reference_type'   => 'outstanding_adjustment',
+                'reference_id'     => null,
+                'description'      => $description !== '' ? $description : 'Carried-forward outstanding balance',
+                'created_by'       => Auth::id(),
+            ]);
+            $model->updateOutstanding($id, $newBalance);
+            return $transactionId;
+        });
+
+        $this->log('customer.outstanding_added', 'customer_transaction', $transactionId, [
+            'customer_id' => $id,
+            'amount'      => $amount,
+        ]);
+        Session::flash('success', 'Outstanding balance added to the customer ledger.');
+        $this->redirect("customers/{$id}?tab=ledger");
     }
 
     public function destroy(Request $request, array $params): void
@@ -194,5 +250,17 @@ class CustomerController extends Controller
         $this->log('customer.restore', 'customer', $id);
         Session::flash('success', 'Customer restored.');
         $this->redirect("/customers/$id");
+    }
+
+    private function phone(Request $request): ?string
+    {
+        $raw = trim((string) $request->input('phone'));
+        $phone = sri_lankan_phone($raw);
+        if ($raw !== '' && $phone === null) {
+            $this->withErrors([
+                'phone' => ['Enter a valid Sri Lankan number, for example +94 77 123 4567 or 0771234567.'],
+            ], $request->all());
+        }
+        return $phone;
     }
 }

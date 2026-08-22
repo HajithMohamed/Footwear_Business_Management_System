@@ -139,6 +139,7 @@ class PurchaseCosting
                 'label'            => trim(($line['brand_name'] ?? '') . ' ' . ($line['art_no'] ?? '')) ?: 'Unnamed line',
                 'colour'           => $line['colour'],
                 'size_set_label'   => $line['size_set_label'],
+                'product_thumb'    => $line['product_thumb'] ?? null,
                 'pairs_in_set'     => $pairsInSet,
                 'set_weight_grams' => $weight,
                 'indian_price'     => $indianPrice,
@@ -245,6 +246,7 @@ class PurchaseCosting
                     pr.pairs_in_set     AS product_pairs_in_set,
                     pr.set_weight_grams AS product_set_weight,
                     pr.final_cost       AS product_final_cost,
+                    pr.thumb_path       AS product_thumb,
                     ai.received_pairs
                FROM purchase_items pi
           LEFT JOIN products pr      ON pr.id = pi.product_id

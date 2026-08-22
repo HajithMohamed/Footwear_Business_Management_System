@@ -289,6 +289,8 @@ CREATE TABLE IF NOT EXISTS customer_transactions (
     reference_type    VARCHAR(40) NULL,
     reference_id      INT UNSIGNED NULL,
     bill_number       VARCHAR(60) NULL,
+    image_path        VARCHAR(255) NULL,
+    thumb_path        VARCHAR(255) NULL,
     due_date          DATE NULL,
     description       VARCHAR(255) NULL,
     created_by        INT UNSIGNED NULL,
@@ -390,6 +392,8 @@ CREATE TABLE IF NOT EXISTS purchase_items (
     brand_name      VARCHAR(80) NULL,              -- as written on the invoice
     art_no          VARCHAR(60) NULL,
     colour          VARCHAR(60) NULL,
+    category_id     SMALLINT UNSIGNED NULL,
+    size_set_id     SMALLINT UNSIGNED NULL,
     size_set_label  VARCHAR(30) NULL,              -- '5x8', '6-10', ...
     pairs_per_set   TINYINT UNSIGNED NULL,
     set_weight_grams INT UNSIGNED NULL,            -- recorded when the shipment is costed
@@ -409,9 +413,13 @@ CREATE TABLE IF NOT EXISTS purchase_items (
     PRIMARY KEY (id),
     KEY idx_pitem_purchase (purchase_id),
     KEY idx_pitem_brand (brand_id),
+    KEY idx_pitem_category (category_id),
+    KEY idx_pitem_size_set (size_set_id),
     KEY idx_pitem_product (product_id),
     CONSTRAINT fk_pitem_purchase FOREIGN KEY (purchase_id) REFERENCES purchases (id) ON DELETE CASCADE,
     CONSTRAINT fk_pitem_brand    FOREIGN KEY (brand_id)    REFERENCES brands (id)    ON DELETE SET NULL,
+    CONSTRAINT fk_pitem_category FOREIGN KEY (category_id) REFERENCES categories (id) ON DELETE SET NULL,
+    CONSTRAINT fk_pitem_size_set FOREIGN KEY (size_set_id) REFERENCES size_sets (id) ON DELETE SET NULL,
     CONSTRAINT fk_pitem_product  FOREIGN KEY (product_id)  REFERENCES products (id)  ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -441,6 +449,8 @@ CREATE TABLE IF NOT EXISTS purchase_clearance_assignments (
     assignment_date     DATE NOT NULL,
     rate_per_kg         DECIMAL(8,2) NULL,          -- snapshot of the agent's rate
     clearance_cost      DECIMAL(12,2) NULL,         -- assigned_weight_kg * rate_per_kg
+    payment_status      ENUM('pending','paid') NOT NULL DEFAULT 'pending',
+    paid_at             DATETIME NULL,
     status              ENUM('assigned','in_transit','delivered','cancelled')
                         NOT NULL DEFAULT 'assigned',
     notes               TEXT NULL,

@@ -14,6 +14,22 @@ class Cheque extends Model
         return $this->db()->insert('cheques', $data);
     }
 
+    public function numberExists(string $number, ?int $excludeId = null): bool
+    {
+        $sql = 'SELECT EXISTS(SELECT 1 FROM cheques WHERE LOWER(cheque_number) = LOWER(?)';
+        $params = [trim($number)];
+        if ($excludeId !== null) {
+            $sql .= ' AND id <> ?';
+            $params[] = $excludeId;
+        }
+        return (bool) $this->db()->scalar($sql . ')', $params);
+    }
+
+    public function byPaymentId(int $paymentId): ?array
+    {
+        return $this->db()->first('SELECT * FROM cheques WHERE payment_id = ?', [$paymentId]);
+    }
+
     public function getById(int $id): ?array
     {
         return $this->db()->first(

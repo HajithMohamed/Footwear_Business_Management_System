@@ -6,6 +6,7 @@ use App\Core\Controller;
 use App\Core\Request;
 use App\Core\Session;
 use App\Models\ClearancePerson;
+use App\Models\PurchaseClearanceAssignment;
 
 /**
  * The agents who clear goods through customs and deliver them to the shop.
@@ -45,11 +46,13 @@ class ClearancePersonController extends Controller
         $history = $this->people->detailedHistory($id);
         $stats = $this->people->stats($id);
 
-        // Fetch invoice items for active shipments to show in the breakdown
-        $activeItems = [];
+        // One person can clear many invoices. Keep every invoice's lines separate
+        // so its verification/share summary cannot be mixed with another invoice.
+        $invoiceItems = [];
         foreach ($history as $h) {
-            if (in_array($h['purchase_status'], ['assigned', 'in_transit'])) {
-                $activeItems[$h['purchase_id']] = $this->people->invoiceItems((int) $h['purchase_id']);
+            $purchaseId = (int) $h['purchase_id'];
+            if (!isset($invoiceItems[$purchaseId])) {
+                $invoiceItems[$purchaseId] = $this->people->invoiceItems($purchaseId);
             }
         }
 
@@ -58,7 +61,7 @@ class ClearancePersonController extends Controller
             'person'      => $person,
             'history'     => $history,
             'stats'       => $stats,
-            'activeItems' => $activeItems,
+            'invoiceItems' => $invoiceItems,
         ]);
     }
 
@@ -100,6 +103,44 @@ class ClearancePersonController extends Controller
         $this->redirect('clearance-persons/' . $id);
     }
 
+    public function destroy(Request $request, array $params): void
+    {
+        $id = (int) $params['id'];
+        $person = $this->people->find($id);
+        if (!$person) {
+            $this->abort(404, 'Clearance person not found.');
+        }
+        if ($this->people->hasOpenAssignments($id)) {
+            Session::flash('error', 'This person still has active shipments. Complete or reassign them before removing the person.');
+            $this->redirect('clearance-persons/' . $id);
+        }
+
+        $this->people->deactivate($id);
+        $this->log('clearance_person.deactivate', 'clearance_person', $id);
+        Session::flash('success', 'Clearance person removed from the active list. Shipment history was kept.');
+        $this->redirect('clearance-persons');
+    }
+
+    public function updatePayment(Request $request, array $params): void
+    {
+        $personId = (int) $params['id'];
+        $assignmentId = (int) $params['assignmentId'];
+        $assignments = new PurchaseClearanceAssignment();
+        $assignment = $assignments->find($assignmentId);
+        if (!$assignment || (int) $assignment['clearance_person_id'] !== $personId) {
+            $this->abort(404, 'Shipment assignment not found.');
+        }
+        $status = (string) $request->input('payment_status', 'pending');
+        if (!in_array($status, ['pending', 'paid'], true)) {
+            Session::flash('error', 'Choose a valid payment status.');
+            $this->redirect('clearance-persons/' . $personId);
+        }
+        $assignments->setPaymentStatus($assignmentId, $status);
+        $this->log('clearance_payment.update', 'clearance_assignment', $assignmentId, ['status' => $status]);
+        Session::flash('success', $status === 'paid' ? 'Clearance payment marked as paid.' : 'Clearance payment marked as pending.');
+        $this->redirect('clearance-persons/' . $personId);
+    }
+
     private function validated(Request $request): array
     {
         $input = $request->all();
@@ -109,9 +150,17 @@ class ClearancePersonController extends Controller
             $this->withErrors(['name' => ['Name is required.']], $input);
         }
 
+        $rawPhone = trim((string) ($input['phone'] ?? ''));
+        $phone = sri_lankan_phone($rawPhone);
+        if ($rawPhone !== '' && $phone === null) {
+            $this->withErrors([
+                'phone' => ['Enter a valid Sri Lankan number, for example +94 77 123 4567 or 0771234567.'],
+            ], $input);
+        }
+
         return [
             'name'          => $name,
-            'phone'         => trim((string) ($input['phone'] ?? '')) ?: null,
+            'phone'         => $phone,
             'address'       => trim((string) ($input['address'] ?? '')) ?: null,
             'wage_per_kilo' => max(0, (float) ($input['wage_per_kilo'] ?? 0)),
             'notes'         => trim((string) ($input['notes'] ?? '')) ?: null,

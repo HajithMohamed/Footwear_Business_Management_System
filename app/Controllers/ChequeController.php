@@ -33,11 +33,6 @@ class ChequeController extends Controller
         if (!in_array($status, self::STATUSES, true)) {
             $status = 'pending';
         }
-        if (!in_array($status, self::TRANSITIONS[$cheque['status']] ?? [], true)) {
-            Session::flash('error', 'That cheque status change is not allowed.');
-            $this->redirect("cheques/{$id}");
-            return;
-        }
 
         $this->view('cheques/index', [
             'title'         => 'Cheques',
@@ -87,6 +82,11 @@ class ChequeController extends Controller
         }
         if (!in_array($status, self::STATUSES, true)) {
             Session::flash('error', 'That is not a valid cheque status.');
+            $this->redirect("cheques/{$id}");
+            return;
+        }
+        if (!in_array($status, self::TRANSITIONS[$cheque['status']] ?? [], true)) {
+            Session::flash('error', 'That cheque status change is not allowed.');
             $this->redirect("cheques/{$id}");
             return;
         }
