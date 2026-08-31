@@ -147,16 +147,13 @@ php tests/run.php
 
 ---
 
-## Deploying to cPanel shared hosting
+## Deploying to production with Docker
 
-1. Upload the project (outside `public_html`, e.g. to `~/footwear-erp`).
-2. Point the domain/subdomain **document root** at the project's `public/` folder
-   (or copy `public/` contents into `public_html` and set `BASE_PATH` accordingly).
-3. Create a MySQL database + user in cPanel, import `database/schema.sql` and `database/seed.sql`
-   via phpMyAdmin, and fill the `DB_*` values in `.env`.
-4. Set `APP_ENV=production` and `APP_DEBUG=false` in `.env`.
-5. Ensure `storage/` and `public/uploads/` are writable by PHP.
-6. (Phase 5) Add a cPanel **cron job** to run the cleanup script.
+For Docker/VPS production deployment, see [DEPLOYMENT.md](DEPLOYMENT.md). It covers
+Caddy HTTPS, isolated networks, persistent volumes, environment configuration,
+database initialization, backups, updates, and rollback. For a new production
+database, import `database/schema.sql` only; `database/seed.sql` is development
+demonstration data and must not be imported into production.
 
 ## Project layout
 

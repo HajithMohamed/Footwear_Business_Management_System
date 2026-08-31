@@ -18,7 +18,11 @@ class Session
             'path'     => '/',
             'httponly' => true,
             'samesite' => 'Lax',
-            'secure'   => (($_SERVER['HTTPS'] ?? '') === 'on'),
+            // Shared hosts do not always populate HTTPS consistently; APP_URL
+            // keeps the cookie secure when TLS is terminated before PHP.
+            'secure'   => (($_SERVER['HTTPS'] ?? '') === 'on')
+                || (($_SERVER['SERVER_PORT'] ?? '') === '443')
+                || str_starts_with((string) config('app.url', ''), 'https://'),
         ]);
         session_start();
 

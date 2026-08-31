@@ -34,6 +34,8 @@ class CalculatorController extends Controller
             'handling_charge'    => $request->input('handling_charge', setting('handling_charge', 25)),
             'rounding_step'      => $request->input('rounding_step', setting('cost_rounding_step', 25)),
         ]);
+        $margin = max(0.0, (float) $request->input('margin_percent', 25));
+        $result['suggested_price'] = CostCalculator::suggestedPrice($result['final_cost'], $margin);
 
         $this->json(['ok' => true, 'result' => $result]);
     }

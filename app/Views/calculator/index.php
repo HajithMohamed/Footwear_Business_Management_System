@@ -45,8 +45,8 @@
     <!-- Result -->
     <div class="rounded-2xl bg-brand-600 text-white p-5 shadow-lg shadow-brand-600/20">
       <p class="text-xs font-medium text-white/60">Final landed cost / pair</p>
-      <p class="mt-1 text-4xl font-extrabold" x-text="money(r.final_cost)">—</p>
-      <p class="mt-1 text-sm font-semibold tracking-[0.18em] text-brand-100">Cost code: <span x-text="r.final_cost_code || '—'"></span></p>
+      <p class="mt-1 text-4xl font-extrabold tracking-[0.18em]" x-text="r.final_cost_code || '—'"></p>
+      <p class="mt-1 text-sm font-semibold text-brand-100">Secret cost code</p>
 
       <div class="mt-4 space-y-1.5 text-sm">
         <div class="flex justify-between"><span class="text-white/70">Discounted price (₹)</span><span x-text="num(r.discounted_price)"></span></div>
@@ -68,7 +68,7 @@
             <span>%</span>
           </div>
         </div>
-        <p class="mt-1 text-2xl font-bold" x-text="money(suggested)">—</p>
+        <p class="mt-1 text-2xl font-bold" x-text="money(r.suggested_price)">—</p>
       </div>
     </div>
   </div>
@@ -86,22 +86,26 @@ function costCalc() {
       handling_charge: <?= (float) $defaults['handling_charge'] ?>,
       rounding_step: <?= (int) $defaults['rounding_step'] ?>,
     },
-    r: {}, margin: 25, suggested: 0, _t: null,
+    r: {}, margin: 25, _t: null, _request: null,
     num(v){ return (v ?? 0).toLocaleString(undefined,{maximumFractionDigits:2}); },
     money(v){ return 'Rs. ' + (v ?? 0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); },
     compute(){
       clearTimeout(this._t);
       this._t = setTimeout(async () => {
+        this._request?.abort();
+        this._request = new AbortController();
         const body = new FormData();
         Object.entries(this.f).forEach(([k,v]) => body.append(k, v ?? 0));
+        body.append('margin_percent', this.margin ?? 0);
         body.append('_token', document.querySelector('meta[name=csrf-token]').content);
-        const res = await fetch('<?= e(url('calculator')) ?>', {
-          method:'POST', body, headers:{'X-Requested-With':'XMLHttpRequest'}
-        });
-        const data = await res.json();
-        if (data.ok) {
-          this.r = data.result;
-          this.suggested = Math.round((this.r.final_cost * (1 + this.margin/100)) / this.f.rounding_step) * this.f.rounding_step;
+        try {
+          const res = await fetch('<?= e(url('calculator')) ?>', {
+            method:'POST', body, headers:{'X-Requested-With':'XMLHttpRequest'}, signal: this._request.signal
+          });
+          const data = await res.json();
+          if (data.ok) this.r = data.result;
+        } catch (error) {
+          if (error.name !== 'AbortError') throw error;
         }
       }, 250);
     }
