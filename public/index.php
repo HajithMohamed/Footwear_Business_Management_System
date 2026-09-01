@@ -62,7 +62,11 @@ try {
         echo e($e->getMessage()) . "\n\n" . e($e->getTraceAsString());
         echo '</pre>';
     } else {
-        error_log($e->getMessage());
+        // Send production exceptions to Apache's/SAPI log as well as the
+        // private PHP error log. Managed hosts such as Render stream this to
+        // their service log, while visitors still receive only the generic
+        // error page below.
+        error_log($e->getMessage(), 4);
         http_response_code(500);
         echo 'Something went wrong. Please try again.';
     }
