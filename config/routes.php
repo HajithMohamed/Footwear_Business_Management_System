@@ -101,6 +101,8 @@ return function (Router $r): void {
     $r->post('/purchases/{id}/assign-clearance', 'ClearanceAssignmentController@store',  ['auth']);
     $r->post('/purchases/{id}/in-transit',       'ClearanceAssignmentController@markInTransit', ['auth']);
     $r->post('/purchases/{id}/assignments/{assignmentId}/delete', 'ClearanceAssignmentController@destroy', ['auth']);
+    $r->post('/purchases/{id}/link-received-parcels', 'ClearanceAssignmentController@linkReceivedParcels', ['auth']);
+    $r->post('/purchases/{id}/assignments/{assignmentId}/payment-rate', 'ClearanceAssignmentController@updateReceivedPaymentRate', ['auth']);
 
     // Parcels
     $r->post('/purchases/{id}/parcels',            'ParcelController@store',  ['auth']);

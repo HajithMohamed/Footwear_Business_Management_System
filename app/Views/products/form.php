@@ -150,6 +150,7 @@ $init = json_encode([
       <div class="text-right">
         <p class="text-[11px] text-slate-400">Final cost / pair</p>
         <p class="text-2xl font-extrabold text-brand-600" x-text="money(preview.final_cost)">—</p>
+        <p class="text-xs font-semibold tracking-[0.14em] text-brand-700">Code: <span x-text="preview.final_cost_code || '—'"></span></p>
       </div>
     </div>
     <p class="text-[11px] text-slate-400">Uses current rates from Settings (LKR <?= e($defaults['lkr_rate']) ?>, clearance Rs.<?= e($defaults['per_kilo_clearance']) ?>/kg). Recalculated on save.</p>

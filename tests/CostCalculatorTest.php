@@ -44,5 +44,11 @@ $z = CostCalculator::calculate([
 eq(0,   $z['clearance_per_pair'], 'guard: pairs=0 → clearance 0 (no div-by-zero)');
 eq(425, $z['final_cost'],         'guard: pairs=0 → final = indian + 0 + handling');
 
+// --- FISHGOLDEN secret cost code ------------------------------------------
+eq('FNXN', CostCalculator::secretCostCode(1000), 'secret code: repeated zeroes');
+eq('FNGX', CostCalculator::secretCostCode(1050), 'secret code: final zero');
+eq('FISHGOLDEN', CostCalculator::secretCostCode(1234567890), 'secret code: complete digit mapping');
+eq('FIGN', $r['final_cost_code'], 'secret code: calculated final cost');
+
 // --- Suggested price -------------------------------------------------------
 eq(1500, CostCalculator::suggestedPrice(1200, 25), 'suggested price: 1200 + 25% → 1500');

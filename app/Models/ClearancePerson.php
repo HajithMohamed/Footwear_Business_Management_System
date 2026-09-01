@@ -144,6 +144,9 @@ class ClearancePerson extends Model
                     p.supplier_invoice_no, p.invoice_date, p.total_invoice_value,
                     p.total_weight_kg AS shipment_total_weight, p.costed_at,
                     ga.weight_received_kg AS arrived_weight_kg,
+                    COALESCE((SELECT SUM(COALESCE(pr.arrived_weight_kg, pr.weight_kg))
+                                FROM parcels pr
+                               WHERE pr.assignment_id = a.id AND pr.status = 'received'), 0) AS received_weight_kg,
                     ga.status AS verification_status, ga.verified_at,
                     (SELECT COUNT(*) FROM purchase_items pi WHERE pi.purchase_id = p.id) AS item_lines,
                     (SELECT COALESCE(SUM(quantity_pairs), 0) FROM purchase_items pi WHERE pi.purchase_id = p.id) AS total_pairs,
@@ -151,7 +154,15 @@ class ClearancePerson extends Model
                        FROM goods_arrivals gx
                        JOIN arrival_items ai ON ai.arrival_id = gx.id
                       WHERE gx.purchase_id = p.id) AS received_pairs,
-                    a.clearance_cost AS payable_amount
+                    CASE
+                      WHEN COALESCE((SELECT SUM(COALESCE(pr.arrived_weight_kg, pr.weight_kg))
+                                       FROM parcels pr
+                                      WHERE pr.assignment_id = a.id AND pr.status = 'received'), 0) > 0
+                      THEN COALESCE((SELECT SUM(COALESCE(pr.arrived_weight_kg, pr.weight_kg))
+                                       FROM parcels pr
+                                      WHERE pr.assignment_id = a.id AND pr.status = 'received'), 0) * COALESCE(a.rate_per_kg, 0)
+                      ELSE 0
+                    END AS payable_amount
                FROM purchase_clearance_assignments a
                JOIN purchases p ON p.id = a.purchase_id
           LEFT JOIN goods_arrivals ga ON ga.purchase_id = p.id

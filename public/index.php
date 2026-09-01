@@ -16,9 +16,16 @@ load_env(BASE_PATH . '/.env');
 if (config('app.debug')) {
     error_reporting(E_ALL);
     ini_set('display_errors', '1');
+    ini_set('display_startup_errors', '1');
 } else {
     error_reporting(E_ALL & ~E_DEPRECATED & ~E_NOTICE);
     ini_set('display_errors', '0');
+    ini_set('display_startup_errors', '0');
+    ini_set('log_errors', '1');
+    $logDir = storage_path('logs');
+    if ((is_dir($logDir) || @mkdir($logDir, 0775, true)) && is_writable($logDir)) {
+        ini_set('error_log', $logDir . '/php-error.log');
+    }
 }
 date_default_timezone_set(config('app.timezone', 'Asia/Colombo'));
 

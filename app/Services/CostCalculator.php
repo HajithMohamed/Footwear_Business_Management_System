@@ -19,6 +19,29 @@ class CostCalculator
 {
     public const DEFAULT_STEP     = 25;
     public const DEFAULT_HANDLING = 25.0;
+    private const SECRET_DIGITS = [
+        '1' => 'F', '2' => 'I', '3' => 'S', '4' => 'H', '5' => 'G',
+        '6' => 'O', '7' => 'L', '8' => 'D', '9' => 'E',
+    ];
+
+    /** Convert a rupee amount to the shop's FISHGOLDEN cost code. */
+    public static function secretCostCode(float $amount): string
+    {
+        $digits = (string) max(0, (int) round($amount));
+        $code = '';
+        $zeroCount = 0;
+
+        foreach (str_split($digits) as $digit) {
+            if ($digit === '0') {
+                // Alternate N/X for each zero encountered: 1000 = FNXN, 1050 = FNGX.
+                $code .= $zeroCount++ % 2 === 0 ? 'N' : 'X';
+                continue;
+            }
+            $code .= self::SECRET_DIGITS[$digit];
+        }
+
+        return $code;
+    }
 
     /**
      * Round up to the next step (default Rs.25).
@@ -94,6 +117,7 @@ class CostCalculator
             'handling_charge'     => $handling,
             // Result
             'final_cost'          => $finalCost,
+            'final_cost_code'     => self::secretCostCode($finalCost),
         ];
     }
 

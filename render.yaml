@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: shoe-bank
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health.php
+    envVars:
+      - key: APP_NAME
+        value: Shoe Bank
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_TIMEZONE
+        value: Asia/Colombo
+      - key: SESSION_NAME
+        value: footwear_erp_session
+      - key: SESSION_LIFETIME
+        value: "120"
+      - key: APP_URL
+        sync: false
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        value: "3306"
+      - key: DB_NAME
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASS
+        sync: false

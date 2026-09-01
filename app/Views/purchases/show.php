@@ -78,9 +78,89 @@ $current  = array_search($purchase['status'], $statuses, true);
     <p class="text-sm text-amber-800 mb-3">The goods are verified and in stock, but you haven't calculated the landed costs yet.</p>
     <a href="<?= e(url('purchases/' . $purchase['id'] . '/costing')) ?>" class="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm"><?= ui_icon('calculator', 'h-4 w-4') ?> Calculate Landed Costs</a>
   </div>
+<?php elseif ($purchase['status'] === 'completed' && $purchase['costed_at']): ?>
+  <div class="mb-6 rounded-2xl bg-green-50 p-4 ring-1 ring-green-200">
+    <p class="text-xs font-bold text-green-600 uppercase tracking-wide mb-1">Next Step</p>
+    <p class="text-sm text-green-800 mb-3">Costing is complete. Review the catalogue and add any missing product photos for each colour.</p>
+    <a href="<?= e(url('products')) ?>" class="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm">Review products &amp; photos</a>
+  </div>
 <?php endif; ?>
 
 <!-- Shipment weight -->
+<?php
+$unassignedReceivedParcels = array_filter($purchase['parcels'] ?? [], static fn ($parcel) =>
+    empty($parcel['assignment_id']) && ($parcel['status'] ?? '') === 'received'
+);
+$unassignedReceivedWeight = array_sum(array_map(static fn ($parcel) => (float) ($parcel['arrived_weight_kg'] ?: $parcel['weight_kg']), $unassignedReceivedParcels));
+?>
+<?php if ($unassignedReceivedParcels): ?>
+  <section class="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+    <h2 class="text-sm font-bold text-amber-900">Link received parcels to a clearance person</h2>
+    <p class="mt-1 text-xs leading-5 text-amber-800"><?= count($unassignedReceivedParcels) ?> received parcel(s), <?= number_format($unassignedReceivedWeight, 2) ?> kg, were saved without a clearance-person link. Select the person who delivered them; payment will use this received weight.</p>
+    <form method="post" action="<?= e(url('purchases/' . $purchase['id'] . '/link-received-parcels')) ?>" class="mt-3 flex gap-2">
+      <?= csrf_field() ?>
+      <select name="clearance_person_id" required class="min-w-0 flex-1 rounded-xl bg-white px-3 py-2 text-sm ring-1 ring-amber-200">
+        <option value="">Select clearance person</option>
+        <?php foreach ($clearancePersons as $person): ?>
+          <option value="<?= (int) $person['id'] ?>"><?= e($person['name']) ?> (<?= money($person['wage_per_kilo']) ?>/kg)</option>
+        <?php endforeach; ?>
+      </select>
+      <input name="rate_per_kg" type="number" step="0.01" min="0" required placeholder="Rs./kg" class="w-24 rounded-xl bg-white px-2 py-2 text-sm ring-1 ring-amber-200">
+      <button class="rounded-xl bg-amber-600 px-3 py-2 text-xs font-bold text-white">Link parcels</button>
+    </form>
+  </section>
+<?php endif; ?>
+<?php if (!empty($purchase['assignments'])): ?>
+  <?php
+    $missingWeightForFollowUp = max(0, (float) $purchase['total_weight_kg'] - (float) $parcelSummary['weight']);
+    $clearanceShareLines = [
+      'SHOE BANK - CLEARANCE PAYMENT SUMMARY',
+      'Purchase: ' . $purchase['purchase_number'],
+      'Received weight: ' . number_format((float) $parcelSummary['weight'], 2) . ' kg',
+      'Waiting weight: ' . number_format($missingWeightForFollowUp, 2) . ' kg',
+    ];
+    foreach ($purchase['assignments'] as $assignment) {
+      $delivered = array_sum(array_map(static fn ($parcel) => (int) $parcel['assignment_id'] === (int) $assignment['id'] && $parcel['status'] === 'received' ? (float) ($parcel['arrived_weight_kg'] ?: $parcel['weight_kg']) : 0, $purchase['parcels']));
+      $amount = $delivered * (float) ($assignment['rate_per_kg'] ?? 0);
+      $clearanceShareLines[] = $assignment['clearance_person_name'] . ': ' . number_format($delivered, 2) . ' kg × ' . money($assignment['rate_per_kg'] ?? 0) . '/kg = ' . money($amount);
+    }
+    $clearanceShareLines[] = 'Payment is calculated only for received parcels.';
+    $clearanceShareText = implode("\n", $clearanceShareLines);
+  ?>
+  <section class="mb-4 rounded-2xl bg-slate-800 p-4 text-white shadow-sm">
+    <div class="flex items-start justify-between gap-3">
+      <div><h2 class="text-sm font-bold">Current clearance &amp; payment summary</h2><p class="mt-1 text-xs text-slate-300">Pay only for parcels received today; missing weight is excluded.</p></div>
+      <span class="text-right text-xs text-slate-300">Received <?= number_format((float) $parcelSummary['weight'], 2) ?> kg<br>Missing <?= number_format(max(0, (float) $purchase['total_weight_kg'] - (float) $parcelSummary['weight']), 2) ?> kg</span>
+    </div>
+    <div class="mt-3 space-y-2">
+      <?php foreach ($purchase['assignments'] as $assignment): ?>
+        <?php $deliveredWeight = array_sum(array_map(static fn ($parcel) => (int) $parcel['assignment_id'] === (int) $assignment['id'] && $parcel['status'] === 'received' ? (float) ($parcel['arrived_weight_kg'] ?: $parcel['weight_kg']) : 0, $purchase['parcels'])); $payableAmount = $deliveredWeight * (float) ($assignment['rate_per_kg'] ?? 0); ?>
+        <form method="post" action="<?= e(url('purchases/' . $purchase['id'] . '/assignments/' . $assignment['id'] . '/payment-rate')) ?>" class="rounded-xl bg-white/10 p-3">
+          <?= csrf_field() ?>
+          <div class="flex items-center justify-between gap-3"><div><p class="text-xs font-bold"><?= e($assignment['clearance_person_name']) ?></p><p class="text-[11px] text-slate-300">Delivered <?= number_format($deliveredWeight, 2) ?> kg &middot; Payable <?= money($payableAmount) ?></p></div><div class="flex items-center gap-2"><input name="rate_per_kg" type="number" step="0.01" min="0" required value="<?= e($assignment['rate_per_kg'] ?? 0) ?>" class="w-24 rounded-lg bg-white px-2 py-1.5 text-right text-sm font-bold text-slate-800"><span class="text-[10px] text-slate-300">Rs/kg</span><button class="rounded-lg bg-brand-500 px-2 py-1.5 text-xs font-bold text-white">Save</button></div></div>
+        </form>
+      <?php endforeach; ?>
+    </div>
+    <div class="mt-3 grid <?= $missingWeightForFollowUp > 0 && !empty($arrival) ? 'grid-cols-2' : 'grid-cols-1' ?> gap-2">
+      <button type="button" onclick="shareClearanceSummary()" class="rounded-xl bg-white/15 px-3 py-2.5 text-xs font-bold text-white ring-1 ring-white/20">Share summary</button>
+      <?php if ($missingWeightForFollowUp > 0 && !empty($arrival)): ?>
+        <form method="post" action="<?= e(url('purchases/' . $purchase['id'] . '/arrival/partial')) ?>">
+          <?= csrf_field() ?>
+          <input type="hidden" name="follow_up_shipment" value="1">
+          <input type="hidden" name="remarks" value="Waiting for <?= number_format($missingWeightForFollowUp, 2) ?> kg to be delivered later.">
+          <button class="w-full rounded-xl bg-amber-500 px-3 py-2.5 text-xs font-bold text-white">Mark <?= number_format($missingWeightForFollowUp, 2) ?> kg as waiting</button>
+        </form>
+      <?php endif; ?>
+    </div>
+  </section>
+  <script>
+  function shareClearanceSummary(){
+    const text = <?= json_encode($clearanceShareText) ?>;
+    if (navigator.share) navigator.share({title: 'Clearance payment summary', text});
+    else navigator.clipboard.writeText(text).then(() => alert('Clearance summary copied.'));
+  }
+  </script>
+<?php endif; ?>
 <div class="mb-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
   <div class="flex items-center justify-between mb-3">
     <p class="text-sm font-semibold text-slate-700">Shipment weight</p>

@@ -1,6 +1,7 @@
 <?php
 use App\Core\Auth;
 use App\Services\StorageService;
+use App\Services\CostCalculator;
 
 $images = $product['images'] ?? [];
 // Group images by colour (blank colour -> "Unspecified")
@@ -113,7 +114,13 @@ $fmt = fn ($v) => $v !== null && $v !== '' ? 'Rs. ' . number_format((float) $v, 
       </div>
       <div class="flex justify-between items-center">
         <span class="text-sm font-semibold text-brand-800">Final Landed Cost</span>
-        <span class="text-lg font-bold text-brand-600"><?= $fmt($product['final_cost']) ?></span>
+        <span class="text-right">
+          <?php if ($product['final_cost'] !== null): ?>
+            <span class="block text-lg font-bold tracking-[0.14em] text-brand-700"><?= e(CostCalculator::secretCostCode((float) $product['final_cost'])) ?></span>
+          <?php else: ?>
+            <span class="block text-lg font-bold text-brand-600">—</span>
+          <?php endif; ?>
+        </span>
       </div>
       <?php if ((float)$product['discount_percent'] > 0): ?>
         <p class="mt-1 text-[10px] text-brand-500 font-semibold text-right">Includes <?= (float)$product['discount_percent'] ?>% discount</p>
