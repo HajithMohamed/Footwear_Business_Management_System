@@ -1,7 +1,8 @@
 services:
   - type: web
-    name: shoe-bank
+    name: footwear-business-management-system
     runtime: docker
+    branch: Development
     dockerfilePath: ./Dockerfile
     healthCheckPath: /health.php
     envVars:
