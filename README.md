@@ -147,13 +147,12 @@ php tests/run.php
 
 ---
 
-## Deploying to production with Docker
+## Deploying to Render
 
-For Docker/VPS production deployment, see [DEPLOYMENT.md](DEPLOYMENT.md). It covers
-Caddy HTTPS, isolated networks, persistent volumes, environment configuration,
-database initialization, backups, updates, and rollback. For a new production
-database, import `database/schema.sql` only; `database/seed.sql` is development
-demonstration data and must not be imported into production.
+The application deploys to a Render Docker Web Service and uses an external
+MySQL database; it does not run MySQL or a TLS proxy inside Render. See
+[DEPLOYMENT.md](DEPLOYMENT.md) for the exact environment variables, database
+import, Render settings, storage limitation, and verification steps.
 
 ## Project layout
 

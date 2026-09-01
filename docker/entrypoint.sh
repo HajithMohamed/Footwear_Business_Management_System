@@ -5,6 +5,19 @@ set -e
 
 cd /var/www/html
 
+# Render supplies PORT at runtime. Keep port 80 as the default so the existing
+# local Docker Compose mapping (8080:80) continues to work unchanged.
+APACHE_PORT="${PORT:-80}"
+case "$APACHE_PORT" in
+    *[!0-9]*|'') echo "PORT must be a numeric TCP port" >&2; exit 1 ;;
+esac
+if [ "$APACHE_PORT" -lt 1 ] || [ "$APACHE_PORT" -gt 65535 ]; then
+    echo "PORT must be between 1 and 65535" >&2
+    exit 1
+fi
+sed -i "s/^Listen 80$/Listen ${APACHE_PORT}/" /etc/apache2/ports.conf
+sed -i "s/<VirtualHost \*:80>/<VirtualHost *:${APACHE_PORT}>/" /etc/apache2/sites-available/000-default.conf
+
 # Build a runtime .env from container environment variables. Production Compose
 # requires credentials to be supplied; no production secret has a fallback here.
 cat > .env <<EOF
