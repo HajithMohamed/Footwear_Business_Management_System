@@ -105,4 +105,33 @@ class PurchaseClearanceAssignment extends Model
             'paid_at'        => $status === 'paid' ? date('Y-m-d H:i:s') : null,
         ]);
     }
+
+    /**
+     * Payment is due only for the weight the assigned person actually delivered.
+     * Returns the recalculated payable weight and amount without inventing a
+     * payment when no received parcel has been logged yet.
+     *
+     * @return array{weight:float,amount:float}
+     */
+    public function syncPaymentToReceivedWeight(int $id): array
+    {
+        $assignment = $this->find($id);
+        if (!$assignment) {
+            return ['weight' => 0.0, 'amount' => 0.0];
+        }
+
+        $weight = (float) $this->db()->scalar(
+            'SELECT COALESCE(SUM(COALESCE(arrived_weight_kg, weight_kg)), 0)
+               FROM parcels
+              WHERE assignment_id = ? AND status = "received"',
+            [$id]
+        );
+        $amount = round($weight * (float) ($assignment['rate_per_kg'] ?? 0), 2);
+
+        if ($weight > 0) {
+            $this->update($id, ['clearance_cost' => $amount]);
+        }
+
+        return ['weight' => $weight, 'amount' => $amount];
+    }
 }

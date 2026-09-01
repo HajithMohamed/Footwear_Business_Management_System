@@ -1,4 +1,5 @@
 <?php
+use App\Services\CostCalculator;
 use App\Services\StorageService;
 $typeBadge = [
     'imported' => 'bg-blue-100 text-blue-700',
@@ -93,8 +94,12 @@ $qs = function (array $overrides) use ($filters): string {
           <?php endif; ?>
           <div class="mt-1.5 flex items-center justify-between">
             <span class="text-sm font-bold text-brand-600">
-              <?php $price = $p['wholesale_price'] ?? $p['retail_price'] ?? $p['final_cost']; ?>
-              <?= $price !== null ? 'Rs.'.number_format((float)$price) : '—' ?>
+              <?php if ($p['final_cost'] !== null): ?>
+                Cost: <?= e(CostCalculator::secretCostCode((float) $p['final_cost'])) ?>
+              <?php else: ?>
+                <?php $price = $p['wholesale_price'] ?? $p['retail_price']; ?>
+                <?= $price !== null ? 'Rs.'.number_format((float)$price) : '—' ?>
+              <?php endif; ?>
             </span>
             <span class="text-[11px] text-slate-400"><?= (int) $p['stock_sets'] ?> sets</span>
           </div>

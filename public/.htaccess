@@ -20,3 +20,9 @@
 
 # Never list directories
 Options -Indexes
+
+# Defense in depth: configuration files must never be served if one is copied
+# into the public directory by mistake.
+<FilesMatch "^(?:\.env|\.git|composer\.(?:json|lock)|package(?:-lock)?\.json)$">
+    Require all denied
+</FilesMatch>

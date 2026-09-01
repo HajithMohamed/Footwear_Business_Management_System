@@ -46,15 +46,19 @@ $verificationSummary = static function (array $h, array $items) use ($person): s
 };
 
 $paymentSummary = static function (array $h) use ($person): string {
-    $payableWeight = (float) $h['assigned_weight_kg'];
+    $payableWeight = (float) ($h['received_weight_kg'] ?? 0);
+    $missingWeight = max(0, (float) $h['assigned_weight_kg'] - $payableWeight);
+    $missingPairs = max(0, (int) ($h['total_pairs'] ?? 0) - (int) ($h['received_pairs'] ?? 0));
     return implode("\n", [
         'SHOE BANK - CLEARANCE PAYMENT SUMMARY',
         'Clearance person: ' . $person['name'],
         'Purchase: ' . $h['purchase_number'],
         'Supplier invoice: ' . (($h['supplier_invoice_no'] ?? '') ?: 'Not recorded'),
-        'Assigned payable weight: ' . number_format($payableWeight, 2) . ' kg',
+        'Received payable weight: ' . number_format($payableWeight, 2) . ' kg',
+        'Weight still missing: ' . number_format($missingWeight, 2) . ' kg',
         'Rate: ' . money($h['rate_per_kg'] ?? 0) . ' / kg',
         'Clearance amount: ' . money($h['payable_amount'] ?? $h['clearance_cost'] ?? 0),
+        'Missing pieces: ' . $missingPairs . ' prs',
         'Payment status: ' . (($h['payment_status'] ?? 'pending') === 'paid' ? 'PAID' : 'PENDING'),
         'Paid on: ' . (!empty($h['paid_at']) ? date('j M Y, h:i A', strtotime($h['paid_at'])) : 'Not paid yet'),
         '',
@@ -161,7 +165,7 @@ foreach ($history as $h) {
 
         <div class="mt-3 flex items-center justify-between rounded-xl bg-white/80 px-3 py-2 text-xs ring-1 ring-brand-100">
           <div><span class="text-slate-400">Clearance rate</span><p class="font-bold text-slate-700"><?= money($h['rate_per_kg'] ?? 0) ?>/kg</p></div>
-          <div class="text-right"><span class="text-slate-400">Clearance payment</span><p class="font-bold text-brand-700"><?= money($h['clearance_cost'] ?? 0) ?></p></div>
+          <div class="text-right"><span class="text-slate-400">Payment for received <?= number_format((float) ($h['received_weight_kg'] ?? 0), 1) ?> kg</span><p class="font-bold text-brand-700"><?= money($h['payable_amount'] ?? 0) ?></p></div>
           <span class="rounded-lg px-2 py-1 text-[10px] font-bold <?= ($h['payment_status'] ?? 'pending') === 'paid' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700' ?>"><?= ($h['payment_status'] ?? 'pending') === 'paid' ? 'Paid' : 'Pending' ?></span>
         </div>
         
@@ -285,7 +289,7 @@ foreach ($history as $h) {
         </div>
       </div>
       <div class="mt-2 flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-xs">
-        <span>Clearance: <strong><?= money($h['payable_amount'] ?? $h['clearance_cost'] ?? 0) ?></strong></span>
+        <span>Received <?= number_format((float) ($h['received_weight_kg'] ?? 0), 1) ?> kg &middot; Payment: <strong><?= money($h['payable_amount'] ?? 0) ?></strong></span>
         <span class="font-bold <?= ($h['payment_status'] ?? 'pending') === 'paid' ? 'text-green-700' : 'text-amber-700' ?>"><?= ($h['payment_status'] ?? 'pending') === 'paid' ? 'Paid' : 'Payment pending' ?></span>
       </div>
       <form method="post" action="<?= e(url('clearance-persons/' . $person['id'] . '/assignments/' . $h['id'] . '/payment')) ?>" class="mt-2">

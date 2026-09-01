@@ -16,9 +16,16 @@ load_env(BASE_PATH . '/.env');
 if (config('app.debug')) {
     error_reporting(E_ALL);
     ini_set('display_errors', '1');
+    ini_set('display_startup_errors', '1');
 } else {
     error_reporting(E_ALL & ~E_DEPRECATED & ~E_NOTICE);
     ini_set('display_errors', '0');
+    ini_set('display_startup_errors', '0');
+    ini_set('log_errors', '1');
+    $logDir = storage_path('logs');
+    if ((is_dir($logDir) || @mkdir($logDir, 0775, true)) && is_writable($logDir)) {
+        ini_set('error_log', $logDir . '/php-error.log');
+    }
 }
 date_default_timezone_set(config('app.timezone', 'Asia/Colombo'));
 
@@ -55,7 +62,11 @@ try {
         echo e($e->getMessage()) . "\n\n" . e($e->getTraceAsString());
         echo '</pre>';
     } else {
-        error_log($e->getMessage());
+        // Send production exceptions to Apache's/SAPI log as well as the
+        // private PHP error log. Managed hosts such as Render stream this to
+        // their service log, while visitors still receive only the generic
+        // error page below.
+        error_log($e->getMessage(), 4);
         http_response_code(500);
         echo 'Something went wrong. Please try again.';
     }

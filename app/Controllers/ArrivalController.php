@@ -289,9 +289,14 @@ class ArrivalController extends Controller
     {
         [$purchaseId, $arrival] = $this->resolve($params);
 
+        $remarks = trim((string) $request->input('remarks', '')) ?: $arrival['remarks'];
+        if ($request->input('follow_up_shipment') && !str_contains((string) $remarks, 'Follow-up shipment required')) {
+            $remarks = trim('Follow-up shipment required for missing goods. ' . $remarks);
+        }
+
         $this->arrivals->update((int) $arrival['id'], [
             'partial_receipt' => 1,
-            'remarks'         => trim((string) $request->input('remarks', '')) ?: $arrival['remarks'],
+            'remarks'         => $remarks,
         ]);
 
         Session::flash('success', 'Partial receipt accepted — the shipment can now be confirmed.');

@@ -3,6 +3,7 @@
 namespace App\Controllers;
 
 use App\Core\Controller;
+use App\Core\Database;
 use App\Core\Request;
 use App\Core\Session;
 use App\Models\ClearancePerson;
@@ -137,6 +138,67 @@ class ClearanceAssignmentController extends Controller
 
         $this->log('clearance.unassign', 'purchase', $purchaseId, ['assignment' => $assignmentId]);
         Session::flash('success', 'Assignment removed.');
+        $this->redirect('purchases/' . $purchaseId);
+    }
+
+    /** Repair older completed shipments whose received parcels were saved without an agent link. */
+    public function linkReceivedParcels(Request $request, array $params): void
+    {
+        $purchaseId = (int) $params['id'];
+        $personId = (int) $request->input('clearance_person_id');
+        $rate = max(0.0, (float) $request->input('rate_per_kg', 0));
+        $purchase = $this->purchases->find($purchaseId);
+        $person = (new ClearancePerson())->find($personId);
+        if (!$purchase || !$person) {
+            $this->abort(404, 'Purchase or clearance person not found.');
+        }
+
+        $weight = (float) Database::instance()->scalar(
+            'SELECT COALESCE(SUM(COALESCE(arrived_weight_kg, weight_kg)), 0)
+               FROM parcels WHERE purchase_id = ? AND assignment_id IS NULL AND status = "received"',
+            [$purchaseId]
+        );
+        if ($weight <= 0) {
+            Session::flash('error', 'There are no unassigned received parcels to link.');
+            $this->redirect('purchases/' . $purchaseId);
+        }
+
+        Database::instance()->transaction(function () use ($purchaseId, $personId, $weight, $rate): void {
+            $assignmentId = $this->assignments->assign($purchaseId, $personId, [
+                'assigned_weight_kg' => $weight,
+                'parcel_count' => 0,
+                'assignment_date' => date('Y-m-d'),
+                'status' => 'delivered',
+                'notes' => 'Linked to parcels after delivery.',
+                'rate_per_kg' => $rate,
+            ]);
+            Database::instance()->query(
+                'UPDATE parcels SET assignment_id = ? WHERE purchase_id = ? AND assignment_id IS NULL AND status = "received"',
+                [$assignmentId, $purchaseId]
+            );
+            $this->assignments->syncPaymentToReceivedWeight($assignmentId);
+        });
+
+        $this->log('clearance.parcels_linked', 'purchase', $purchaseId, ['person' => $personId, 'weight' => $weight]);
+        Session::flash('success', sprintf('Linked %.2f kg of received parcels to the clearance person. Payment is now calculated from that delivered weight.', $weight));
+        $this->redirect('purchases/' . $purchaseId);
+    }
+
+    /** Set the actual per-kg clearance payment for delivered parcels. */
+    public function updateReceivedPaymentRate(Request $request, array $params): void
+    {
+        $purchaseId = (int) $params['id'];
+        $assignmentId = (int) $params['assignmentId'];
+        $assignment = $this->assignments->find($assignmentId);
+        if (!$assignment || (int) $assignment['purchase_id'] !== $purchaseId) {
+            $this->abort(404, 'Clearance assignment not found.');
+        }
+
+        $rate = max(0.0, (float) $request->input('rate_per_kg', 0));
+        $this->assignments->update($assignmentId, ['rate_per_kg' => $rate]);
+        $payable = $this->assignments->syncPaymentToReceivedWeight($assignmentId);
+        $this->log('clearance.payment_rate', 'clearance_assignment', $assignmentId, ['rate_per_kg' => $rate, 'amount' => $payable['amount']]);
+        Session::flash('success', sprintf('Clearance payment updated: %.2f kg × %s/kg = %s.', $payable['weight'], money($rate), money($payable['amount'])));
         $this->redirect('purchases/' . $purchaseId);
     }
 

@@ -147,16 +147,12 @@ php tests/run.php
 
 ---
 
-## Deploying to cPanel shared hosting
+## Deploying to Render
 
-1. Upload the project (outside `public_html`, e.g. to `~/footwear-erp`).
-2. Point the domain/subdomain **document root** at the project's `public/` folder
-   (or copy `public/` contents into `public_html` and set `BASE_PATH` accordingly).
-3. Create a MySQL database + user in cPanel, import `database/schema.sql` and `database/seed.sql`
-   via phpMyAdmin, and fill the `DB_*` values in `.env`.
-4. Set `APP_ENV=production` and `APP_DEBUG=false` in `.env`.
-5. Ensure `storage/` and `public/uploads/` are writable by PHP.
-6. (Phase 5) Add a cPanel **cron job** to run the cleanup script.
+The application deploys to a Render Docker Web Service and uses an external
+MySQL database; it does not run MySQL or a TLS proxy inside Render. See
+[DEPLOYMENT.md](DEPLOYMENT.md) for the exact environment variables, database
+import, Render settings, storage limitation, and verification steps.
 
 ## Project layout
 

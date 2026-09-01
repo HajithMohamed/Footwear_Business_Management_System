@@ -1,0 +1,58 @@
+services:
+  - type: web
+    name: footwear-business-management-system
+    runtime: docker
+    branch: Development
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health.php
+    envVars:
+      - key: APP_NAME
+        value: Shoe Bank
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_TIMEZONE
+        value: Asia/Colombo
+      - key: SESSION_NAME
+        value: footwear_erp_session
+      - key: SESSION_LIFETIME
+        value: "120"
+      - key: APP_URL
+        sync: false
+      - key: DB_HOST
+        fromService:
+          name: shoe-bank-mysql
+          type: pserv
+          property: host
+      - key: DB_PORT
+        value: "3306"
+      - key: DB_NAME
+        value: shoe_bank
+      - key: DB_USER
+        value: shoe_bank_user
+      - key: DB_PASS
+        fromService:
+          name: shoe-bank-mysql
+          type: pserv
+          envVarKey: MYSQL_PASSWORD
+
+  - type: pserv
+    name: shoe-bank-mysql
+    runtime: docker
+    branch: Development
+    dockerfilePath: ./docker/mysql/Dockerfile
+    dockerContext: .
+    disk:
+      name: shoe-bank-mysql-data
+      mountPath: /var/lib/mysql
+      sizeGB: 10
+    envVars:
+      - key: MYSQL_DATABASE
+        value: shoe_bank
+      - key: MYSQL_USER
+        value: shoe_bank_user
+      - key: MYSQL_PASSWORD
+        sync: false
+      - key: MYSQL_ROOT_PASSWORD
+        sync: false

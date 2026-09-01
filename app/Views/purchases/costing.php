@@ -11,6 +11,35 @@
   </div>
 <?php endif; ?>
 
+<!-- Verification and clearance-payment summary, before any costing inputs. -->
+<section class="mb-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
+  <div class="flex items-center justify-between gap-3">
+    <div>
+      <h2 class="text-sm font-semibold text-slate-700">Verification &amp; clearance payment summary</h2>
+      <p class="mt-1 text-xs text-slate-500"><?= (int) $summary['pairs'] ?> verified pairs are ready for costing.</p>
+    </div>
+    <span class="rounded-lg bg-green-50 px-2 py-1 text-[10px] font-bold text-green-700">Verified</span>
+  </div>
+  <?php if ($assignments): ?>
+    <div class="mt-3 space-y-2">
+      <?php foreach ($assignments as $assignment): ?>
+        <div class="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-xs">
+          <div>
+            <p class="font-semibold text-slate-700"><?= e($assignment['clearance_person_name']) ?></p>
+            <p class="text-slate-500"><?= number_format((float) $assignment['assigned_weight_kg'], 2) ?> kg &middot; <?= money($assignment['rate_per_kg'] ?? 0) ?>/kg</p>
+          </div>
+          <div class="text-right">
+            <p class="font-bold text-slate-800"><?= money($assignment['clearance_cost'] ?? 0) ?></p>
+            <p class="text-[10px] font-semibold <?= ($assignment['payment_status'] ?? 'pending') === 'paid' ? 'text-green-700' : 'text-amber-700' ?>"><?= e(ucfirst($assignment['payment_status'] ?? 'pending')) ?></p>
+          </div>
+        </div>
+      <?php endforeach; ?>
+    </div>
+  <?php else: ?>
+    <p class="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">No clearance-person payment has been recorded for this shipment.</p>
+  <?php endif; ?>
+</section>
+
 <form method="post" action="<?= e(url('purchases/' . $purchase['id'] . '/costing')) ?>" enctype="multipart/form-data" class="mx-auto max-w-4xl pt-8 pb-32">
   <?= csrf_field() ?>
 
@@ -122,19 +151,21 @@
             <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-3">Cost Breakdown</p>
             <div class="flex items-center justify-between text-sm mb-2">
               <span class="text-slate-300">Indian Cost</span>
-              <span class="font-medium text-slate-100"><?= number_format($c['indian_cost_lkr']) ?> LKR</span>
+              <span class="font-medium text-slate-100"><?= e(\App\Services\CostCalculator::secretCostCode($c['indian_cost_lkr'])) ?></span>
             </div>
             <div class="flex items-center justify-between text-sm mb-2">
               <span class="text-slate-300">Clearance Share</span>
-              <span class="font-medium text-slate-100">+ <?= number_format($c['clearance_per_pair']) ?></span>
+              <span class="font-medium text-slate-100">+ <?= e(\App\Services\CostCalculator::secretCostCode($c['clearance_per_pair'])) ?></span>
             </div>
             <div class="flex items-center justify-between text-sm mb-4">
               <span class="text-slate-300">Handling</span>
-              <span class="font-medium text-slate-100">+ <?= number_format($c['handling_charge']) ?></span>
+              <span class="font-medium text-slate-100">+ <?= e(\App\Services\CostCalculator::secretCostCode($c['handling_charge'])) ?></span>
             </div>
             <div class="flex items-center justify-between border-t border-slate-600 pt-3">
               <span class="text-xs font-bold text-white uppercase tracking-wide">Final Landed Cost</span>
-              <span class="text-xl font-bold text-brand-300"><?= money($c['final_cost']) ?></span>
+              <span class="text-right">
+                <span class="block text-xl font-bold tracking-[0.14em] text-brand-300"><?= e($c['final_cost_code']) ?></span>
+              </span>
             </div>
           </div>
         <?php else: ?>
@@ -164,7 +195,7 @@
         </div>
         <div class="mt-1 flex items-center justify-between text-sm">
           <span class="text-slate-300">Total landed value</span>
-          <span class="font-bold text-brand-300"><?= money($summary['value']) ?> <span class="text-xs font-normal text-white/60">(<?= (int) $summary['pairs'] ?> pairs)</span></span>
+          <span class="font-bold tracking-[0.14em] text-brand-300"><?= e(\App\Services\CostCalculator::secretCostCode($summary['value'])) ?> <span class="text-xs font-normal tracking-normal text-white/60">(<?= (int) $summary['pairs'] ?> pairs)</span></span>
         </div>
       </div>
 

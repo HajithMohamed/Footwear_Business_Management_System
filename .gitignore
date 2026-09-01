@@ -1,5 +1,7 @@
 # Environment
 .env
+.env.*
+!.env.example
 
 # Storage (user uploads, logs) — keep the folders, ignore contents
 /storage/uploads/*
@@ -8,6 +10,8 @@
 !/storage/logs/.gitkeep
 /storage/backups/*
 !/storage/backups/.gitkeep
+/tmp/*
+!/tmp/.gitkeep
 
 # Dependencies (only if Composer is ever used)
 /vendor/

@@ -246,7 +246,9 @@ class PurchaseCosting
                     pr.pairs_in_set     AS product_pairs_in_set,
                     pr.set_weight_grams AS product_set_weight,
                     pr.final_cost       AS product_final_cost,
-                    pr.thumb_path       AS product_thumb,
+                    (SELECT img.thumb_path FROM product_images img
+                      WHERE img.product_id = pr.id
+                   ORDER BY img.is_main DESC, img.sort_order, img.id LIMIT 1) AS product_thumb,
                     ai.received_pairs
                FROM purchase_items pi
           LEFT JOIN products pr      ON pr.id = pi.product_id

@@ -16,9 +16,11 @@ return [
     'db' => [
         'host'    => env('DB_HOST', '127.0.0.1'),
         'port'    => env('DB_PORT', '3306'),
-        'name'    => env('DB_NAME', 'footwear_erp'),
-        'user'    => env('DB_USER', 'root'),
-        'pass'    => env('DB_PASS', ''),
+        // Prefer conventional production names, while retaining the original
+        // DB_NAME/DB_USER/DB_PASS names used by the Docker development setup.
+        'name'    => env('DB_DATABASE', env('DB_NAME', 'footwear_erp')),
+        'user'    => env('DB_USERNAME', env('DB_USER', 'root')),
+        'pass'    => env('DB_PASSWORD', env('DB_PASS', '')),
         'charset' => 'utf8mb4',
     ],
 
