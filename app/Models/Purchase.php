@@ -291,4 +291,26 @@ class Purchase extends Model
             [$supplierName, $excludeId]
         );
     }
+
+    /** Supplier + invoice number is the business identity of an imported invoice. */
+    public function findDuplicateInvoice(string $supplierName, string $invoiceNumber, int $excludeId = 0): ?array
+    {
+        $supplierName = trim($supplierName);
+        $invoiceNumber = trim($invoiceNumber);
+        if ($supplierName === '' || $invoiceNumber === '') {
+            return null;
+        }
+
+        return $this->db()->first(
+            "SELECT id, purchase_number, supplier_name, supplier_invoice_no,
+                    invoice_date, total_invoice_value, status
+               FROM purchases
+              WHERE source = 'import'
+                AND LOWER(TRIM(supplier_name)) = LOWER(TRIM(?))
+                AND LOWER(TRIM(supplier_invoice_no)) = LOWER(TRIM(?))
+                AND id <> ?
+              LIMIT 1",
+            [$supplierName, $invoiceNumber, $excludeId]
+        );
+    }
 }

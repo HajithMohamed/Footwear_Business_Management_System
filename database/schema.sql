@@ -399,6 +399,7 @@ CREATE TABLE IF NOT EXISTS purchases (
     updated_at            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     UNIQUE KEY uq_purchase_number (purchase_number),
+    UNIQUE KEY uq_purchase_supplier_invoice (source, supplier_name, supplier_invoice_no),
     KEY idx_purchase_status (status),
     KEY idx_purchase_supplier (supplier_name),
     KEY idx_purchase_date (purchase_date),

@@ -80,8 +80,8 @@
     <a href="<?= e(url("customers/{$customer['id']}/payment")) ?>" class="flex-1 flex justify-center items-center h-12 rounded-xl bg-white text-brand-700 font-bold active:scale-95 transition gap-2 shadow-sm text-sm">
       <?= ui_icon('wallet', 'h-5 w-5') ?> Payment
     </a>
-    <a href="<?= e(url("customers/{$customer['id']}?tab=ledger")) ?>" class="flex-1 flex justify-center items-center h-12 rounded-xl bg-white/20 hover:bg-white/30 text-white font-bold active:scale-95 transition gap-2 shadow-sm text-sm">
-      <?= ui_icon('note', 'h-5 w-5') ?> Ledger
+    <a href="<?= e(url("customers/{$customer['id']}/statement")) ?>" class="flex-1 flex justify-center items-center h-12 rounded-xl bg-white/20 hover:bg-white/30 text-white font-bold active:scale-95 transition gap-2 shadow-sm text-sm">
+      <?= ui_icon('note', 'h-5 w-5') ?> Share Ledger
     </a>
   </div>
   <?php if (!empty($customer['phone'])): ?>
@@ -121,12 +121,12 @@
   <!-- Tab Navigation (Sticky) -->
   <div class="tab-nav mb-5">
     <template x-for="t in [
-      {id:'summary', label:'Summary'},
+      {id:'summary', label:'Overview'},
       {id:'ledger', label:'Ledger'},
-      {id:'invoices', label:'History'},
+      {id:'invoices', label:'Bills'},
       {id:'payments', label:'Payments'},
       {id:'cheques', label:'Cheques'},
-      {id:'analytics', label:'Activity'}
+      {id:'analytics', label:'Intelligence'}
     ]">
       <button @click="tab = t.id" 
               class="tab-item"
@@ -164,6 +164,7 @@
 
   <!-- LEDGER TAB -->
   <div x-show="tab === 'ledger'" style="display: none;" x-transition class="space-y-4">
+    <a href="<?= e(url("customers/{$customer['id']}/statement")) ?>" class="btn btn-primary btn-full min-h-12"><?= ui_icon('note', 'h-5 w-5') ?> Share Ledger</a>
     <div class="flex justify-between items-center bg-white rounded-xl p-3 ring-1 ring-slate-200 shadow-sm">
       <span class="text-xs font-bold text-slate-600 uppercase tracking-wide">Current Balance</span>
       <span class="text-sm font-bold <?= $balance > 0 ? 'text-amber-600' : 'text-green-600' ?>">Rs. <?= number_format($balance, 0) ?></span>
