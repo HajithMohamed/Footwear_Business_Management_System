@@ -202,6 +202,18 @@ class Product extends Model
         return $groups;
     }
 
+    /** Invoice colour names already associated with this product's variants. */
+    public function variantColours(int $productId): array
+    {
+        return $this->db()->column(
+            'SELECT DISTINCT colour
+               FROM purchase_items
+              WHERE product_id = ? AND colour IS NOT NULL AND TRIM(colour) <> ""
+           ORDER BY colour',
+            [$productId]
+        );
+    }
+
     /** Record a price change into the append-only history. */
     public function recordPriceChange(int $productId, string $type, $old, $new, ?int $userId): void
     {

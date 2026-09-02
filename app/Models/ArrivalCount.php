@@ -44,4 +44,19 @@ class ArrivalCount extends Model
         }
         return $grouped;
     }
+
+    /** Total incremental entries across every colour row in an article group. */
+    public function totalForItemIds(array $arrivalItemIds): int
+    {
+        $ids = array_values(array_filter(array_map('intval', $arrivalItemIds), static fn (int $id) => $id > 0));
+        if (!$ids) {
+            return 0;
+        }
+
+        $placeholders = implode(', ', array_fill(0, count($ids), '?'));
+        return (int) $this->db()->scalar(
+            "SELECT COALESCE(SUM(counted_pairs), 0) FROM arrival_counts WHERE arrival_item_id IN ({$placeholders})",
+            $ids
+        );
+    }
 }
