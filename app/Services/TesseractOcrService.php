@@ -35,7 +35,9 @@ class TesseractOcrService
         return self::$available = $check['exit'] === 0;
     }
 
-    /** @return array{ok:bool,text?:string,confidence?:string,reason?:string} */
+    /**
+     * @return array{ok:bool,text?:string,confidence?:string,candidates?:array<int,array{text:string,confidence:string,source:string}>,reason?:string}
+     */
     public function read(string $path, string $mimeType, int $pageSegmentationMode = 6): array
     {
         if (!$this->isAvailable()) {
@@ -47,21 +49,37 @@ class TesseractOcrService
 
         $source = $path;
         $temporary = [];
+        $candidates = [];
         try {
             if (strtolower($mimeType) === 'application/pdf') {
-                // Tally and many supplier PDFs have a real text layer. Preserve
-                // its column layout before falling back to bitmap OCR; rasterizing
-                // first can scramble product rows and HSN/SAC columns.
-                $native = $this->run([$this->pdfToText, '-layout', $path, '-']);
-                $nativeText = trim($native['stdout']);
-                if ($native['exit'] === 0 && preg_match_all('/[A-Za-z0-9]{2,}/', $nativeText) >= 20) {
-                    return ['ok' => true, 'text' => $nativeText, 'confidence' => 'high'];
+                // Do not accept the first PDF text stream merely because it has
+                // many words. Some Tally PDFs have a damaged layout stream which
+                // moves a wrapped product's HSN/quantity onto the preceding row.
+                // -raw often restores logical product rows; keep both candidates
+                // so InvoiceExtractionService can choose the fullest parse.
+                foreach (['-raw', '-layout'] as $mode) {
+                    $native = $this->run([$this->pdfToText, $mode, $path, '-']);
+                    $nativeText = trim($native['stdout']);
+                    if ($native['exit'] === 0 && preg_match_all('/[A-Za-z0-9]{2,}/', $nativeText) >= 20) {
+                        $candidates[] = [
+                            'text'       => $nativeText,
+                            'confidence' => 'high',
+                            'source'     => 'pdf-text-' . substr($mode, 1),
+                        ];
+                    }
                 }
+                if ($candidates && $this->hasCompleteNativeTable($candidates)) {
+                    return $this->success($candidates);
+                }
+
                 $prefix = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'shoe_bank_ocr_' . bin2hex(random_bytes(8));
-                $converted = $this->run([$this->pdfToPpm, '-f', '1', '-singlefile', '-r', '220', '-png', $path, $prefix]);
+                $converted = $this->run([$this->pdfToPpm, '-f', '1', '-singlefile', '-r', '300', '-png', $path, $prefix]);
                 $source = $prefix . '.png';
                 $temporary[] = $source;
                 if ($converted['exit'] !== 0 || !is_file($source)) {
+                    if ($candidates) {
+                        return $this->success($candidates);
+                    }
                     return ['ok' => false, 'reason' => 'This PDF could not be converted for OCR. Install poppler-utils on the server.'];
                 }
             } else {
@@ -74,15 +92,30 @@ class TesseractOcrService
 
             $pageSegmentationMode = in_array($pageSegmentationMode, [3, 4, 6, 11, 12], true)
                 ? $pageSegmentationMode : 6;
-            $result = $this->run([$this->tesseract, $source, 'stdout', '-l', 'eng', '--psm', (string) $pageSegmentationMode]);
-            $text = trim($result['stdout']);
-            if ($result['exit'] !== 0 || $text === '') {
+            $modes = [$pageSegmentationMode];
+            // A malformed PDF table is worth a second local pass. PSM 4 usually
+            // keeps rows together; PSM 6 often recovers a description wrapped at
+            // the bottom of a table cell.
+            if (strtolower($mimeType) === 'application/pdf' && $pageSegmentationMode !== 6) {
+                $modes[] = 6;
+            }
+            foreach ($modes as $mode) {
+                $result = $this->run([$this->tesseract, $source, 'stdout', '-l', 'eng', '--psm', (string) $mode]);
+                $text = trim($result['stdout']);
+                if ($result['exit'] !== 0 || $text === '') {
+                    continue;
+                }
+                $wordCount = preg_match_all('/[A-Za-z0-9]{2,}/', $text);
+                $candidates[] = [
+                    'text'       => $text,
+                    'confidence' => $wordCount >= 30 ? 'high' : ($wordCount >= 10 ? 'medium' : 'low'),
+                    'source'     => 'ocr-psm-' . $mode,
+                ];
+            }
+            if (!$candidates) {
                 return ['ok' => false, 'reason' => 'No readable text was found. Try a brighter, straighter photo.'];
             }
-
-            $wordCount = preg_match_all('/[A-Za-z0-9]{2,}/', $text);
-            $confidence = $wordCount >= 30 ? 'high' : ($wordCount >= 10 ? 'medium' : 'low');
-            return ['ok' => true, 'text' => $text, 'confidence' => $confidence];
+            return $this->success($candidates);
         } finally {
             foreach ($temporary as $file) {
                 if (is_file($file)) {
@@ -90,6 +123,53 @@ class TesseractOcrService
                 }
             }
         }
+    }
+
+    /** @param array<int,array{text:string,confidence:string,source:string}> $candidates */
+    private function success(array $candidates): array
+    {
+        $first = $candidates[0];
+        return ['ok' => true, 'text' => $first['text'], 'confidence' => $first['confidence'], 'candidates' => $candidates];
+    }
+
+    /**
+     * A native stream with article headers but no HSN/quantity/amount in one or
+     * more matching blocks has had its columns reordered. It is retained as a
+     * candidate, but should not prevent a visual OCR fallback.
+     *
+     * @param array<int,array{text:string,confidence:string,source:string}> $candidates
+     */
+    private function hasCompleteNativeTable(array $candidates): bool
+    {
+        foreach ($candidates as $candidate) {
+            if ($this->nativeTableIsComplete($candidate['text'])) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private function nativeTableIsComplete(string $text): bool
+    {
+        $pattern = '/^\s*(?:\d{1,3}[.)]?\s+)?[A-Z][A-Z0-9\/-]{2,}\s+[A-Z][A-Z -]{1,40}?\s+[0-9O]{1,2}\s*[Xx-]\s*[0-9O]{1,2}\b/im';
+        if (!preg_match_all($pattern, $text, $headers, PREG_OFFSET_CAPTURE) || !$headers[0]) {
+            // This is not an Indian article/colour/size table. Native text is
+            // still preferable to raster OCR for the simpler invoice formats.
+            return true;
+        }
+
+        foreach ($headers[0] as $index => $header) {
+            $start = $header[1];
+            $end = isset($headers[0][$index + 1]) ? $headers[0][$index + 1][1] : strlen($text);
+            $block = substr($text, $start, $end - $start);
+            $block = preg_split('/\b(?:cgst|sgst|igst|round\s*off|grand\s*total|taxable\s+value)\b/i', $block, 2)[0];
+            if (!preg_match('/\b\d{4,8}\b/', $block)
+                || !preg_match('/\b\d{1,6}\s*(?:nos?|pairs?|pcs?)\b/i', $block)
+                || !preg_match('/\b\d{1,3}(?:,\d{3})+(?:\.\d{1,2})\b/', $block)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** Upscale, grayscale and increase contrast without changing the original. */
