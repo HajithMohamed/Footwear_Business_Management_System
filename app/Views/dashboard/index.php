@@ -83,6 +83,10 @@ elseif ($hour < 17) $greeting = 'Good Afternoon';
     <div class="quick-action-icon bg-slate-100 text-slate-600"><?= ui_icon('users') ?></div>
     <span>Customer</span>
   </a>
+  <a href="<?= e(url('products/create')) ?>" class="quick-action"><div class="quick-action-icon bg-purple-50 text-purple-600"><?= ui_icon('box') ?></div><span>Product</span></a>
+  <a href="<?= e(url('expenses/create')) ?>" class="quick-action"><div class="quick-action-icon bg-red-50 text-red-600"><?= ui_icon('expense') ?></div><span>Expense</span></a>
+  <a href="<?= e(url('returns/create')) ?>" class="quick-action"><div class="quick-action-icon bg-amber-50 text-amber-700"><?= ui_icon('return') ?></div><span>Return Goods</span></a>
+  <a href="<?= e(url('stock-adjustments/create')) ?>" class="quick-action"><div class="quick-action-icon bg-blue-50 text-blue-700"><?= ui_icon('plus') ?></div><span>Stock Adjustment</span></a>
 </div>
 
 <!-- Alerts Section -->
