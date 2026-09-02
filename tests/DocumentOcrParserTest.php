@@ -49,3 +49,71 @@ eq(289.0, $mtcRows['items'][0]['unit_price'], 'OCR parser uses MRP as Indian pri
 eq(0, $mtcRows['items'][0]['pairs_per_set'], 'OCR parser leaves derived pairs-per-set out of product details');
 eq(0.0, $mtcRows['items'][0]['line_total'], 'OCR parser does not add supplier rate/amount as product details');
 eq(41063.0, $mtcRows['total_invoice_value'], 'OCR parser reads MTC grand total');
+
+$indianInvoice = $parser->purchase(<<<'TEXT'
+SUBJECT TO CHENNAI JURISDICTION
+Invoice No. M/4803/26-27
+Dated 21-Aug-26
+MEENAKSHI SHOE TRADING COMPANY
+16/2, UMPHERSON STREET
+1
+FLR41701 BLACK 05X08
+30
+239
+640299
+30 nos
+161.20 nos
+9 %
+4,400.76
+2
+WH3951 BLACK 05X09
+30
+259
+640299
+30 nos
+174.00 nos
+9 %
+4,750.20
+3
+WLR74018 N-BLUE 05X08
+30
+309
+640299
+15 nos
+209.00 nos
+9 %
+2,852.85
+4
+WLR74018 MAROON 05X08
+30
+309
+640299
+15 nos
+209.00 nos
+9 %
+2,852.85
+CGST @ 2.50%
+371.42
+SGST @ 2.50%
+371.42
+ROUND OFF
+0.50
+TEXT, 'high');
+eq('MEENAKSHI SHOE TRADING COMPANY', $indianInvoice['supplier_name'], 'OCR parser ignores jurisdiction text for supplier');
+eq('M/4803/26-27', $indianInvoice['supplier_invoice_no'], 'OCR parser reads Indian invoice number');
+eq('2026-08-21', $indianInvoice['invoice_date'], 'OCR parser reads textual Indian invoice date');
+eq(4, count($indianInvoice['items']), 'OCR parser keeps four Indian invoice variants');
+eq('N-BLUE', $indianInvoice['items'][2]['colour'], 'OCR parser keeps variant colour separate');
+eq(640299, (int) $indianInvoice['items'][0]['hsn_sac'], 'OCR parser keeps HSN separate from money');
+eq(15600.0, $indianInvoice['total_invoice_value'], 'OCR parser calculates total from lines plus GST and round-off');
+
+$wrappedRow = $parser->purchase(<<<'TEXT'
+MEENAKSHI SHOE TRADING COMPANY
+Invoice No. M/4803/26-27
+Dated 21-Aug-26
+4 WLR74018 MAROON 05X08
+30 309 640299 15 nos 209.00 nos 9 % 2,852.85
+TEXT, 'high');
+eq(1, count($wrappedRow['items']), 'OCR parser joins a wrapped PDF product description');
+eq('WLR74018', $wrappedRow['items'][0]['art_no'], 'OCR parser reads wrapped article number');
+eq('MAROON', $wrappedRow['items'][0]['colour'], 'OCR parser reads wrapped colour');

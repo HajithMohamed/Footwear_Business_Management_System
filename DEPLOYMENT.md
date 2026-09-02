@@ -4,7 +4,7 @@
 
 This is a PHP 8.3 Apache MVC application. `public/` is the only web root, and Apache serves it through `docker/vhost.conf` with rewrite rules and upload execution disabled. The container entrypoint writes a runtime `.env` from environment variables, so no production secrets are baked into the image. PDO uses `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASS` (with `DB_DATABASE`, `DB_USERNAME`, and `DB_PASSWORD` also accepted).
 
-The local `docker-compose.yml` remains a development-only PHP + MySQL stack. The Render Blueprint now creates a separate private MySQL 8 service, `shoe-bank-mysql`, with a persistent disk. It is not part of the web container and is reachable only on Render's private network.
+The local `docker-compose.yml` remains a development-only PHP + MySQL stack. Production uses the existing external FreeDB database; the Render Blueprint deliberately creates no MySQL service and the PHP web service must not receive `MYSQL_ROOT_PASSWORD`.
 
 ## Architecture
 
@@ -18,7 +18,7 @@ Render Web Service (Dockerfile)
 PHP 8.3 + Apache (/public)
           |
           v
-Private MySQL 8 service (`shoe-bank-mysql`)
+External FreeDB MySQL database (`freedb_xGoOT6yI`)
 ```
 
 ## Render configuration
@@ -33,19 +33,19 @@ Create the services through a **Blueprint** from `HajithMohamed/Footwear_Busines
 | Health check path | `/health.php` |
 | Port | Do not set manually; the entrypoint listens on Render's `PORT` value. |
 
-The included `render.yaml` creates both services. On its first sync, enter the `MYSQL_PASSWORD` and `MYSQL_ROOT_PASSWORD` prompts for `shoe-bank-mysql`; never enter the root password on the PHP service.
+The included `render.yaml` creates only the web service. It uses the configured FreeDB host; set `DB_PASS` as a secret in the Render dashboard. Do not add any `MYSQL_*` variables to this service.
 
 ```dotenv
 APP_NAME=Shoe Bank
 APP_ENV=production
 APP_DEBUG=false
-APP_URL=https://YOUR-SERVICE.onrender.com
+APP_URL=https://footwear-business-management-system.onrender.com
 APP_TIMEZONE=Asia/Colombo
-DB_HOST=provided automatically by the Blueprint
+DB_HOST=sql.freedb.tech
 DB_PORT=3306
-DB_NAME=shoe_bank
-DB_USER=shoe_bank_user
-DB_PASS=provided securely from shoe-bank-mysql
+DB_NAME=freedb_xGoOT6yI
+DB_USER=u_lZIrIf
+DB_PASS=your-FreeDB-password-set-as-a-Render-secret
 SESSION_NAME=footwear_erp_session
 SESSION_LIFETIME=120
 ```
@@ -54,25 +54,23 @@ Use your actual Render URL for `APP_URL`; never commit it with credentials. Rend
 
 ## Database initialization
 
-On the initial `shoe-bank-mysql` deploy, the official MySQL image imports `database/schema.sql` and then `database/seed.sql` automatically because the new MySQL Dockerfile copies them to `/docker-entrypoint-initdb.d/`. This occurs only while its persistent `/var/lib/mysql` disk is empty.
+Import into the existing `freedb_xGoOT6yI` database using FreeDB's phpMyAdmin/SQL import tool. Select that database first, then import the files in this exact order:
 
 ```bash
-mysql --host=shoe-bank-mysql --port=3306 \
-  --user=shoe_bank_user --password shoe_bank < database/schema.sql
-mysql --host=shoe-bank-mysql --port=3306 \
-  --user=shoe_bank_user --password shoe_bank < database/seed.sql
+1. `database/schema.sql`
+2. `database/seed.sql`
 ```
 
-`schema.sql` creates InnoDB, `utf8mb4` tables and their foreign keys. `seed.sql` is demonstration data and includes `admin / admin123`; for a real production deployment either create an administrator separately with `php scripts/create-admin.php ...` or immediately change that password and remove demo data as appropriate. Do not rerun historical migrations blindly; apply only the migration required by a later release, after a database backup.
+The files contain no `CREATE DATABASE`, `USE`, grants, or server-level commands, so no compatibility edit is required for an already-selected FreeDB database. `schema.sql` creates InnoDB/`utf8mb4` tables and foreign keys. An obsolete seed block for an earlier purchase-order schema was removed because those tables no longer exist in the current schema; the current purchase, arrival, and clearance tables remain intact. `seed.sql` includes `admin / admin123`; change that password immediately after first login. Do not rerun historical migrations blindly; apply only the migration required by a later release, after a database backup.
 
 ## Deploy and verify
 
 1. Commit these hosting changes and push them to the `Development` branch.
-2. In Render, create a Blueprint from the repository and branch.
-3. Provide new, unique `MYSQL_PASSWORD` and `MYSQL_ROOT_PASSWORD` values when prompted.
-4. Set `APP_URL` to the generated Render URL and deploy.
-5. Wait for `/health.php` to return `ok`.
-5. Open the Render URL and verify login/logout, protected pages, data writes, uploads, OCR, and a representative product/customer/sale workflow.
+2. In Render, create or update the Blueprint from the repository and branch.
+3. Set the FreeDB `DB_HOST` and secret `DB_PASS` on the web service; confirm the database name/user values shown above.
+4. Import `schema.sql`, then `seed.sql`, into the selected FreeDB database.
+5. Deploy and wait for `/health.php` to return `ok`.
+6. Open the Render URL and verify login/logout, protected pages, Products, Customers, Suppliers, and a representative sale workflow.
 
 The service includes Tesseract OCR and Poppler utilities. `public/uploads`, `storage/logs`, and `storage/backups` are created writable at boot, but a normal Render filesystem is ephemeral: uploaded files and local logs/backups may be lost on restart or redeploy. Use object storage or a persistent disk for a future production hardening step; this deployment intentionally preserves the existing upload implementation.
 
