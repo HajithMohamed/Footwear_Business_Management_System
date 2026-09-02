@@ -10,6 +10,7 @@ $val = function (string $key, $default = '') use ($product) {
     return $product[$key] ?? $default;
 };
 $type = $val('type', 'imported');
+$variantColours = $variantColours ?? [];
 
 $init = json_encode([
     'type'       => $type,
@@ -197,6 +198,15 @@ $init = json_encode([
   <section class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100 space-y-3">
     <h2 class="text-sm font-semibold text-slate-700">Images</h2>
 
+    <?php if ($variantColours): ?>
+      <datalist id="invoice-colours">
+        <?php foreach ($variantColours as $colour): ?>
+          <option value="<?= e($colour) ?>"></option>
+        <?php endforeach; ?>
+      </datalist>
+      <p class="text-[11px] text-slate-500">Invoice colour variants: <?= e(implode(', ', $variantColours)) ?>. Label each image with the matching variant.</p>
+    <?php endif; ?>
+
     <?php if ($isEdit && !empty($product['images'])): ?>
       <p class="text-[11px] text-slate-400">Set a colour name per image and choose the main image.</p>
       <div class="space-y-2">
@@ -205,7 +215,7 @@ $init = json_encode([
             <img src="<?= e(StorageService::url($img['thumb_path'] ?: $img['path'])) ?>" alt="" class="h-14 w-14 shrink-0 rounded-lg object-cover ring-1 ring-slate-100">
             <form method="post" action="<?= e(url('products/'.$product['id'].'/images/'.$img['id'])) ?>" class="flex flex-1 items-center gap-2">
               <?= csrf_field() ?>
-              <input name="colour" value="<?= e($img['colour']) ?>" placeholder="Colour name"
+              <input name="colour" value="<?= e($img['colour']) ?>" list="invoice-colours" placeholder="Colour name"
                      class="min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-sm">
               <label class="flex shrink-0 items-center gap-1 text-[11px] text-slate-500">
                 <input type="checkbox" name="is_main" value="1" <?= $img['is_main'] ? 'checked' : '' ?>> Main
@@ -227,9 +237,9 @@ $init = json_encode([
       </label>
       <label class="block">
         <span class="text-xs font-medium text-slate-500">Colour for this batch <span class="text-slate-300">(optional)</span></span>
-        <input name="image_colour" placeholder="e.g. Maroon — applied to the files above" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">
+        <input name="image_colour" list="invoice-colours" placeholder="Choose the invoice colour, e.g. Maroon" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">
       </label>
-      <p class="text-[10px] text-slate-400">Tip: upload one colour at a time to keep photos grouped. You can rename each image's colour after saving.</p>
+      <p class="text-[10px] text-slate-400">Upload one colour at a time. The selected invoice colour is saved on every photo in this batch; you can refine each label after saving.</p>
     </div>
   </section>
 

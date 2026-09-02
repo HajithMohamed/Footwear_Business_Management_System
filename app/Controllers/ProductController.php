@@ -208,6 +208,7 @@ class ProductController extends Controller
             'brands'     => (new Brand())->active(),      // includes `origin` for client-side filtering
             'categories' => (new Category())->active(),
             'sizeSets'   => (new SizeSet())->active(),
+            'variantColours' => $product ? $this->products->variantColours((int) $product['id']) : [],
             'defaults'   => [
                 'lkr_rate'           => setting('lkr_rate', 3.6),
                 'per_kilo_clearance' => setting('per_kilo_clearance', 3000),

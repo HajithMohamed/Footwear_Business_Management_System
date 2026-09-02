@@ -143,6 +143,7 @@
               <span class="rounded-md bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700">Image Added</span>
             <?php endif; ?>
           </div>
+          <p class="mb-2 text-[11px] text-slate-500">This photo will be classified as: <strong><?= e($line['colour'] ?: 'Unspecified') ?></strong>.</p>
           <input type="file" name="line_images[<?= (int) $line['id'] ?>]" accept="image/jpeg,image/png,image/webp" class="block w-full text-xs text-slate-500 file:mr-2 file:rounded-xl file:border-0 file:bg-brand-100 file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-brand-700 hover:file:bg-brand-200 cursor-pointer">
         </div>
 
