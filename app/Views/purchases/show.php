@@ -311,7 +311,7 @@ $unassignedReceivedWeight = array_sum(array_map(static fn ($parcel) => (float) (
             <?= e(trim(($item['brand_name'] ?? '') . ' ' . ($item['art_no'] ?? ''))) ?: '—' ?>
           </p>
           <p class="text-[11px] text-slate-500">
-            <?= e($item['colour'] ?: '—') ?> · <?= e($item['size_set_label'] ?: '—') ?> · <?= (int) $item['quantity_pairs'] ?> pairs
+            <?= e($item['colour'] ?: '—') ?> · <?= e($item['size_set_label'] ?: '—') ?> · <?= (int) $item['quantity_pairs'] ?> pieces<?php if ((float) ($item['unit_price'] ?? 0) > 0): ?> · ₹<?= e(number_format((float) $item['unit_price'], 2)) ?> MRP<?php endif; ?>
           </p>
         </div>
         <span class="shrink-0 rounded-md px-2 py-0.5 text-[10px] font-semibold <?= $item['match_status'] === 'matched' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700' ?>">

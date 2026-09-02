@@ -26,6 +26,11 @@ class SizeSet extends Model
     public static function pairsFromLabel(string $label): int
     {
         $label = trim($label);
+        if (preg_match('/^\s*(\d+)\s*(?:x|\x{00D7})\s*(\d+)\s*$/iu', $label, $m)) {
+            $low  = (int) $m[1];
+            $high = (int) $m[2];
+            return $high >= $low ? ($high - $low + 1) : 0;
+        }
         if (preg_match('/^\s*(\d+)\s*[-–—to]+\s*(\d+)\s*$/i', $label, $m)) {
             $low  = (int) $m[1];
             $high = (int) $m[2];
