@@ -329,7 +329,11 @@ class PurchaseController extends Controller
             $match['matched'],
             $match['new']
         ));
-        $this->redirect('purchases/' . $purchaseId);
+        // A confirmed invoice immediately enters the clearance workflow. Drafts
+        // return to their detail page so they can be completed later.
+        $this->redirect($asDraft
+            ? 'purchases/' . $purchaseId
+            : 'purchases/' . $purchaseId . '/assign-clearance');
     }
 
     // --- helpers --------------------------------------------------------------
