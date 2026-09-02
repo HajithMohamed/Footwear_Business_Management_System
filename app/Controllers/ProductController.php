@@ -76,11 +76,20 @@ class ProductController extends Controller
     {
         $data = $this->resolveReferences($request->all());
         $this->validate($data);
+        $this->preventDuplicateArticle($data);
 
         $payload = $this->buildPayload($data, null);
         $payload['created_by'] = Auth::id();
 
-        $id = $this->products->create($payload);
+        try {
+            $id = $this->products->create($payload);
+        } catch (\PDOException $e) {
+            if ((string)$e->getCode() === '23000') {
+                Session::flash('error', 'This Brand + Article Number already exists. Use the existing product.');
+                $this->back();
+            }
+            throw $e;
+        }
 
         // Initial price history snapshot
         foreach (['final_cost', 'wholesale_price', 'retail_price'] as $f) {
@@ -112,6 +121,7 @@ class ProductController extends Controller
 
         $data = $this->resolveReferences($request->all());
         $this->validate($data);
+        $this->preventDuplicateArticle($data, $id);
 
         $payload = $this->buildPayload($data, $existing);
 
@@ -124,7 +134,15 @@ class ProductController extends Controller
 
         // Note: stock is adjusted via the stock endpoint, not here.
         unset($payload['stock_sets']);
-        $this->products->update($id, $payload);
+        try {
+            $this->products->update($id, $payload);
+        } catch (\PDOException $e) {
+            if ((string)$e->getCode() === '23000') {
+                Session::flash('error', 'This Brand + Article Number already exists. Use the existing product.');
+                $this->back();
+            }
+            throw $e;
+        }
         $this->handleImageUploads($request, $id);
 
         $this->log('product_updated', 'product', $id);
@@ -299,6 +317,16 @@ class ProductController extends Controller
         $v = new Validator($data, $rules);
         if ($v->fails()) {
             $this->withErrors($v->errors(), $data);
+        }
+    }
+
+    private function preventDuplicateArticle(array $data, int $excludeId = 0): void
+    {
+        $brandId = ctype_digit((string) ($data['brand_id'] ?? '')) ? (int) $data['brand_id'] : null;
+        $article = trim((string) ($data['art_no'] ?? ''));
+        if ($duplicate = $this->products->findDuplicateArticle($brandId, $article, $excludeId)) {
+            Session::flash('error', 'This Brand + Article Number already exists. Use the existing product.');
+            $this->redirect('products/' . $duplicate['id']);
         }
     }
 

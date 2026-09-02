@@ -28,6 +28,20 @@ class StorageService
         return url('uploads/' . ltrim($relativePath, '/'));
     }
 
+    /** Prefer an existing thumbnail, fall back to the original, or render no broken URL. */
+    public static function existingImageUrl(?string $thumbnail, ?string $original): ?string
+    {
+        foreach ([$thumbnail, $original] as $relativePath) {
+            if (!$relativePath) continue;
+            $relativePath = ltrim(str_replace('\\', '/', $relativePath), '/');
+            if (str_contains($relativePath, '..')) continue;
+            if (is_file(BASE_PATH . '/public/uploads/' . $relativePath)) {
+                return self::url($relativePath);
+            }
+        }
+        return null;
+    }
+
     /**
      * Validate an uploaded image. Returns an error string or null if OK.
      */

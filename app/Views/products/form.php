@@ -84,7 +84,7 @@ $init = json_encode([
       </div>
       <label class="block">
         <span class="text-xs font-medium text-slate-500">Art number</span>
-        <input name="art_no" value="<?= e($val('art_no')) ?>" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">
+        <input name="art_no" value="<?= e($val('art_no', (string) request('art_no', ''))) ?>" class="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">
       </label>
       <label class="block col-span-2">
         <span class="text-xs font-medium text-slate-500">Name <span class="text-slate-300">(optional)</span></span>
@@ -211,17 +211,17 @@ $init = json_encode([
       <p class="text-[11px] text-slate-400">Set a colour name per image and choose the main image.</p>
       <div class="space-y-2">
         <?php foreach ($product['images'] as $img): ?>
+          <?php $editImageUrl = StorageService::existingImageUrl($img['thumb_path'] ?? null, $img['path'] ?? null); ?>
           <div class="flex items-center gap-2 rounded-xl border border-slate-100 p-2">
-            <img src="<?= e(StorageService::url($img['thumb_path'] ?: $img['path'])) ?>" alt="" class="h-14 w-14 shrink-0 rounded-lg object-cover ring-1 ring-slate-100">
-            <form method="post" action="<?= e(url('products/'.$product['id'].'/images/'.$img['id'])) ?>" class="flex flex-1 items-center gap-2">
-              <?= csrf_field() ?>
-              <input name="colour" value="<?= e($img['colour']) ?>" list="invoice-colours" placeholder="Colour name"
+            <?php if ($editImageUrl): ?><img src="<?= e($editImageUrl) ?>" alt="" class="h-14 w-14 shrink-0 rounded-lg object-cover ring-1 ring-slate-100"><?php else: ?><div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-[10px] text-slate-500">Missing</div><?php endif; ?>
+            <div class="flex flex-1 items-center gap-2">
+              <input form="imgform<?= (int)$img['id'] ?>" name="colour" value="<?= e($img['colour']) ?>" list="invoice-colours" placeholder="Colour name"
                      class="min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-sm">
               <label class="flex shrink-0 items-center gap-1 text-[11px] text-slate-500">
-                <input type="checkbox" name="is_main" value="1" <?= $img['is_main'] ? 'checked' : '' ?>> Main
+                <input form="imgform<?= (int)$img['id'] ?>" type="checkbox" name="is_main" value="1" <?= $img['is_main'] ? 'checked' : '' ?>> Main
               </label>
-              <button class="shrink-0 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-white">Save</button>
-            </form>
+              <button form="imgform<?= (int)$img['id'] ?>" class="shrink-0 rounded-lg bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-white">Save</button>
+            </div>
             <button type="button" onclick="if(confirm('Remove this image?')) document.getElementById('delimg<?= $img['id'] ?>').submit();"
                     aria-label="Delete image" title="Delete image" class="shrink-0 rounded-lg bg-red-50 px-2 py-1.5 text-red-600"><?= ui_icon('trash', 'h-4 w-4') ?></button>
           </div>
@@ -288,6 +288,7 @@ $init = json_encode([
 
   <!-- Hidden per-image delete forms -->
   <?php foreach (($product['images'] ?? []) as $img): ?>
+    <form id="imgform<?= (int)$img['id'] ?>" method="post" action="<?= e(url('products/'.$product['id'].'/images/'.$img['id'])) ?>" class="hidden"><?= csrf_field() ?></form>
     <form id="delimg<?= $img['id'] ?>" method="post" action="<?= e(url('products/'.$product['id'].'/images/'.$img['id'].'/delete')) ?>" class="hidden">
       <?= csrf_field() ?>
     </form>

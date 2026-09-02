@@ -1,6 +1,16 @@
 # ---------------------------------------------------------------------------
 # Footwear Wholesale ERP — PHP 8.3 + Apache
 # ---------------------------------------------------------------------------
+FROM node:20-alpine AS assets
+WORKDIR /build
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY tailwind.config.js ./
+COPY app/Views ./app/Views
+COPY app/Helpers ./app/Helpers
+COPY public/assets/css/tailwind.input.css ./public/assets/css/tailwind.input.css
+RUN npm run build:css
+
 FROM php:8.3-apache
 
 # System libs + PHP extensions (GD for image processing, pdo_mysql for DB)
@@ -30,6 +40,7 @@ COPY docker/vhost.conf /etc/apache2/sites-available/000-default.conf
 
 WORKDIR /var/www/html
 COPY . .
+COPY --from=assets /build/public/assets/css/tailwind.css /var/www/html/public/assets/css/tailwind.css
 
 # Entrypoint writes .env from container env, fixes permissions, starts Apache
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh

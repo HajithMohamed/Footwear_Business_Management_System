@@ -51,6 +51,9 @@ class Product extends Model
                     (SELECT thumb_path FROM product_images pi
                       WHERE FIND_IN_SET(pi.product_id, pg.product_ids)
                    ORDER BY pi.is_main DESC, pi.sort_order, pi.id LIMIT 1) AS main_thumb,
+                    (SELECT path FROM product_images pi
+                      WHERE FIND_IN_SET(pi.product_id, pg.product_ids)
+                   ORDER BY pi.is_main DESC, pi.sort_order, pi.id LIMIT 1) AS main_image,
                     (SELECT GROUP_CONCAT(DISTINCT pi2.colour ORDER BY pi2.colour SEPARATOR ', ')
                        FROM product_images pi2
                       WHERE FIND_IN_SET(pi2.product_id, pg.product_ids) AND pi2.colour IS NOT NULL AND pi2.colour <> '') AS image_colours,
@@ -228,7 +231,7 @@ class Product extends Model
     }
 
     /** Adjust stock by a signed delta and log the movement. */
-    public function adjustStock(int $productId, int $delta, string $reason, ?int $userId, ?string $note = null): void
+    public function adjustStock(int $productId, int $delta, string $reason, ?int $userId, ?string $note = null, ?string $refType = null, ?int $refId = null): void
     {
         $this->db()->beginTransaction();
         try {
@@ -238,9 +241,9 @@ class Product extends Model
             $balance = $current + $delta;
             $this->db()->query('UPDATE products SET stock_sets = ? WHERE id = ?', [$balance, $productId]);
             $this->db()->query(
-                'INSERT INTO stock_history (product_id, change_qty, balance_after, reason, created_by, note)
-                 VALUES (?, ?, ?, ?, ?, ?)',
-                [$productId, $delta, $balance, $reason, $userId, $note]
+                'INSERT INTO stock_history (product_id, change_qty, balance_after, reason, created_by, note, ref_type, ref_id)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                [$productId, $delta, $balance, $reason, $userId, $note, $refType, $refId]
             );
             $this->db()->commit();
         } catch (\Throwable $e) {
@@ -286,6 +289,34 @@ class Product extends Model
     public function distinctArtNumbers(): array
     {
         return $this->db()->column('SELECT DISTINCT art_no FROM products WHERE art_no IS NOT NULL AND art_no != "" ORDER BY art_no');
+    }
+
+    /** Article lookup for flexible entry; multiple brands may legitimately share an article number. */
+    public function searchByArticle(string $article, int $limit = 12): array
+    {
+        $article = trim($article);
+        if ($article === '') return [];
+        $limit = max(1, min(30, $limit));
+        return $this->db()->all(
+            "SELECT p.id, p.art_no, p.name, p.stock_sets, p.wholesale_price, p.retail_price,
+                    b.name AS brand_name, ss.label AS size_set_label
+               FROM products p LEFT JOIN brands b ON b.id = p.brand_id LEFT JOIN size_sets ss ON ss.id = p.size_set_id
+              WHERE p.deleted_at IS NULL AND p.art_no LIKE ? ORDER BY (LOWER(p.art_no)=LOWER(?)) DESC, p.art_no LIMIT {$limit}",
+            ['%' . $article . '%', $article]
+        );
+    }
+
+    public function findDuplicateArticle(?int $brandId, string $article, int $excludeId = 0): ?array
+    {
+        $article = trim($article);
+        if ($article === '') return null;
+        return $this->db()->first(
+            'SELECT p.id, p.art_no, p.name, p.stock_sets, b.name AS brand_name
+               FROM products p LEFT JOIN brands b ON b.id = p.brand_id
+              WHERE p.deleted_at IS NULL AND LOWER(TRIM(p.art_no))=LOWER(TRIM(?))
+                AND ((p.brand_id = ?) OR (p.brand_id IS NULL AND ? IS NULL)) AND p.id <> ? LIMIT 1',
+            [$article, $brandId, $brandId, $excludeId]
+        );
     }
 
     public function distinctColours(): array

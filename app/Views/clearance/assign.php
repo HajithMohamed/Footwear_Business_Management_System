@@ -36,21 +36,33 @@
   <?php endif; ?>
 </div>
 
-<form method="post" action="<?= e(url('purchases/' . $purchase['id'] . '/assign-clearance')) ?>" class="space-y-4">
+<form method="post" action="<?= e(url('purchases/' . $purchase['id'] . '/assign-clearance')) ?>" class="space-y-4" x-data="{ person: '<?= e((string) old('clearance_person_id', '')) ?>' }">
   <?= csrf_field() ?>
 
   <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100 space-y-3">
     <div>
       <label class="block text-xs font-medium text-slate-500 mb-1">Clearance person *</label>
-      <select name="clearance_person_id" required class="w-full rounded-xl px-3 py-2 text-sm ring-1 ring-slate-200">
+      <select name="clearance_person_id" required x-model="person" class="w-full rounded-xl px-3 py-2 text-sm ring-1 ring-slate-200">
         <option value="">Choose…</option>
         <?php foreach ($people as $p): ?>
           <option value="<?= (int) $p['id'] ?>">
             <?= e($p['name']) ?> — <?= number_format((float) $p['wage_per_kilo'], 2) ?>/kg
           </option>
         <?php endforeach; ?>
+        <option value="__new__">+ Add new clearance person</option>
       </select>
       <?php if ($msg = error('clearance_person_id')): ?><p class="mt-1 text-xs text-red-600"><?= e($msg) ?></p><?php endif; ?>
+      <?php if (!$people): ?><p class="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">No clearance persons yet. Choose <strong>Add new clearance person</strong>.</p><?php endif; ?>
+    </div>
+
+    <div x-show="person === '__new__'" x-cloak class="space-y-3 rounded-xl bg-brand-50 p-3 ring-1 ring-brand-200">
+      <p class="text-sm font-semibold text-brand-800">New clearance person</p>
+      <label class="block text-xs font-medium text-slate-600">Name *<input name="new_person_name" :required="person === '__new__'" value="<?= e(old('new_person_name', '')) ?>" class="mt-1 min-h-11 w-full rounded-xl bg-white px-3 ring-1 ring-slate-200"></label>
+      <div class="grid grid-cols-2 gap-3">
+        <label class="block text-xs font-medium text-slate-600">Mobile<input name="new_person_phone" type="tel" value="<?= e(old('new_person_phone', '')) ?>" placeholder="0771234567" class="mt-1 min-h-11 w-full rounded-xl bg-white px-3 ring-1 ring-slate-200"></label>
+        <label class="block text-xs font-medium text-slate-600">Rate / kg<input name="new_person_rate" type="number" min="0" step="0.01" value="<?= e(old('new_person_rate', '0')) ?>" class="mt-1 min-h-11 w-full rounded-xl bg-white px-3 ring-1 ring-slate-200"></label>
+      </div>
+      <p class="text-xs text-brand-700">The person will be saved and selected for this assignment.</p>
     </div>
 
     <div class="grid grid-cols-2 gap-3">

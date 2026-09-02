@@ -74,6 +74,7 @@ class CustomerStatementService
             $row['debit'] = in_array($type, self::CREDIT_TYPES, true) ? 0.0 : $amount;
             $row['credit'] = in_array($type, self::CREDIT_TYPES, true) ? $amount : 0.0;
             $row['reference'] = $row['bill_number'] ?: ($row['cheque_number'] ?: ($row['payment_reference'] ?: $this->typeLabel($type)));
+            $row['statement_type'] = ($row['reference_type'] ?? '') === 'customer_return' ? 'Return' : $this->typeLabel($type);
             if ($type === 'sale') $bills += $amount;
             if ($type === 'payment') $payments += $amount;
         }
@@ -129,7 +130,7 @@ class CustomerStatementService
         foreach ($rows as $row) {
             $out .= "0.86 0.89 0.93 RG 0.4 w 30 " . ($y - 5) . " m 565 " . ($y - 5) . " l S\n";
             $out .= $this->text(36, $y, 8, date('d M Y', strtotime($row['statement_date'])));
-            $out .= $this->text(94, $y, 8, $this->typeLabel((string) $row['transaction_type']));
+            $out .= $this->text(94, $y, 8, (string) ($row['statement_type'] ?? $this->typeLabel((string) $row['transaction_type'])));
             $out .= $this->text(160, $y, 8, $this->short((string) $row['reference'], 28));
             $out .= $this->text(330, $y, 8, $row['debit'] ? number_format($row['debit'], 2) : '-');
             $out .= $this->text(405, $y, 8, $row['credit'] ? number_format($row['credit'], 2) : '-');
