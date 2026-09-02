@@ -3,6 +3,8 @@
   <h1 class="text-lg font-bold text-slate-800"><?= e($title) ?></h1>
   <a href="<?= e(url("customers/{$customer['id']}/bill")) ?>"
      class="ml-auto rounded-lg bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-700">Attach bill</a>
+  <a href="<?= e(url("customers/{$customer['id']}/statement")) ?>"
+     class="rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white">Share Ledger</a>
 </div>
 
 <!-- Summary cards -->

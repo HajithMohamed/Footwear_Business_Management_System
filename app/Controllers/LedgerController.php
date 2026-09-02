@@ -10,6 +10,7 @@ use App\Models\CustomerIntelligence;
 use App\Models\CustomerTransaction;
 use App\Models\Sale;
 use App\Services\CustomerIntelligenceService;
+use App\Services\CustomerStatementService;
 
 class LedgerController extends Controller
 {
@@ -45,6 +46,48 @@ class LedgerController extends Controller
             'balance'        => $txnModel->currentBalance($customerId),
             'invoices'       => (new Sale())->byCustomer($customerId, 20),
         ]);
+    }
+
+    public function statement(Request $request, array $params): void
+    {
+        $customer = $this->statementCustomer((int) $params['customerId']);
+        $this->view('ledger/statement', [
+            'title' => 'Share Ledger - ' . $customer['name'],
+            'customer' => $customer,
+        ]);
+    }
+
+    public function statementPdf(Request $request, array $params): void
+    {
+        $customer = $this->statementCustomer((int) $params['customerId']);
+        $service = new CustomerStatementService();
+        try {
+            [$from, $to] = $service->period(
+                (string) $request->query('period', 'all'),
+                $request->query('from'),
+                $request->query('to')
+            );
+            $statement = $service->data($customer, $from, $to);
+            $pdf = $service->pdf($statement, (string) config('app.name', 'Shoe Bank'));
+        } catch (\InvalidArgumentException $e) {
+            http_response_code(422);
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+            return;
+        } catch (\Throwable $e) {
+            http_response_code(500);
+            header('Content-Type: application/json');
+            echo json_encode(['success' => false, 'message' => 'Unable to generate the ledger PDF.']);
+            return;
+        }
+
+        $filename = $service->filename($customer);
+        $this->log('customer.statement_generated', 'customer', (int) $customer['id'], ['from' => $from, 'to' => $to]);
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: inline; filename="' . $filename . '"');
+        header('Content-Length: ' . strlen($pdf));
+        header('Cache-Control: private, no-store, max-age=0');
+        echo $pdf;
     }
 
     public function intelligence(Request $request): void
@@ -127,5 +170,15 @@ class LedgerController extends Controller
             'prospect' => 'On the books but has never bought',
             default    => '',
         };
+    }
+
+    /** Authentication middleware plus this lookup enforce the app's customer-access boundary. */
+    private function statementCustomer(int $customerId): array
+    {
+        $customer = (new Customer())->getById($customerId);
+        if (!$customer) {
+            $this->abort(404, 'Customer not found');
+        }
+        return $customer;
     }
 }

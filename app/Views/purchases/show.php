@@ -51,7 +51,7 @@ $current  = array_search($purchase['status'], $statuses, true);
 <?php if (!Purchase::statusAtLeast($purchase['status'], 'completed')): ?>
   <div class="mb-6 rounded-2xl bg-brand-50 p-4 ring-1 ring-brand-200">
     <p class="text-xs font-bold text-brand-600 uppercase tracking-wide mb-1">Next Step</p>
-    <?php if ($purchase['status'] === 'draft' || $purchase['status'] === 'ordered'): ?>
+    <?php if (in_array($purchase['status'], ['draft', 'ordered', 'awaiting_clearance'], true)): ?>
       <p class="text-sm text-brand-800 mb-3">Assign a clearance person to handle the import and clear this shipment from customs.</p>
       <a href="<?= e(url('purchases/' . $purchase['id'] . '/assign-clearance')) ?>" class="inline-block rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm">Assign clearance person</a>
     <?php elseif ($purchase['status'] === 'assigned'): ?>
