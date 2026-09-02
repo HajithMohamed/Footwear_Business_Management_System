@@ -58,9 +58,29 @@ class InvoiceExtractionService
             // mode used for simple bills and cheques.
             $local = $localReader->read($absolutePath, $mimeType, 4);
             if ($local['ok']) {
+                $parser = new DocumentOcrParser();
+                $best = null;
+                foreach ($local['candidates'] ?? [$local] as $candidate) {
+                    if (!is_array($candidate) || trim((string) ($candidate['text'] ?? '')) === '') {
+                        continue;
+                    }
+                    $data = $parser->purchase(
+                        (string) $candidate['text'],
+                        (string) ($candidate['confidence'] ?? 'low')
+                    );
+                    $score = $this->localCandidateScore($data);
+                    // Candidates arrive in preference order (logical PDF text
+                    // before column-layout text), so retain that order on a tie.
+                    if ($best === null || $score > $best['score']) {
+                        $best = ['data' => $data, 'score' => $score];
+                    }
+                }
+                if ($best !== null) {
+                    return ['ok' => true, 'data' => $best['data']];
+                }
                 return [
                     'ok' => true,
-                    'data' => (new DocumentOcrParser())->purchase($local['text'], $local['confidence'] ?? 'low'),
+                    'data' => $parser->purchase($local['text'], $local['confidence'] ?? 'low'),
                 ];
             }
             $localFailure = $local['reason'] ?? 'Local OCR could not read the document.';
@@ -94,6 +114,26 @@ class InvoiceExtractionService
         }
 
         return $this->interpret($response['body']);
+    }
+
+    /** Prefer the scan candidate that produces the most complete product rows. */
+    private function localCandidateScore(array $data): int
+    {
+        $score = 0;
+        foreach ($data['items'] ?? [] as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            // A valid product row matters most. The five visible invoice facts
+            // then break ties: article, colour, size, total pieces and MRP.
+            $score += 100;
+            $score += trim((string) ($item['art_no'] ?? '')) !== '' ? 10 : 0;
+            $score += trim((string) ($item['colour'] ?? '')) !== '' ? 5 : 0;
+            $score += trim((string) ($item['size_set_label'] ?? '')) !== '' ? 5 : 0;
+            $score += (int) ($item['quantity_pairs'] ?? 0) > 0 ? 10 : 0;
+            $score += (float) ($item['unit_price'] ?? 0) > 0 ? 10 : 0;
+        }
+        return $score;
     }
 
     // --- Request building -----------------------------------------------------

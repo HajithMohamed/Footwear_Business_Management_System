@@ -446,7 +446,9 @@ class PurchaseController extends Controller
                 'colour'         => trim((string) ($colours[$i] ?? '')) ?: null,
                 'category_id'    => $categoryId,
                 'size_set_id'    => $sizeSetId,
-                'size_set_label' => $sizeSet ? $sizeSet['label'] : (trim((string) ($sizeSets[$i] ?? '')) ?: null),
+                // Keep the size as printed on the invoice (for example 05X08)
+                // while size_set_id records the matched catalogue range (5-8).
+                'size_set_label' => trim((string) ($sizeSets[$i] ?? '')) ?: ($sizeSet ? $sizeSet['label'] : null),
                 'pairs_per_set'  => ((int) ($perSet[$i] ?? 0)) ?: ($sizeSet ? (int) $sizeSet['default_pairs'] : null),
                 'quantity_sets'  => $qtySets,
                 'quantity_pairs' => $qtyPairs,

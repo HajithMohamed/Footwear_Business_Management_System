@@ -63,61 +63,152 @@ class DocumentOcrParser
         ];
     }
 
-    /** Read a table where each column has been emitted as a separate OCR line. */
+    /**
+     * Read the Indian supplier table. Its description cell contains the product
+     * facts in this order: article, colour, size, total pieces, Indian MRP.
+     *
+     * PDFs can place the final two description values below the visual row while
+     * keeping HSN/quantity/rate on the first line. Work from a whole row block
+     * rather than assuming the MRP is immediately before the HSN column.
+     */
     private function indianInvoiceItems(array $lines): array
     {
         $starts = [];
         foreach ($lines as $i => $line) {
-            if (preg_match('/^(?:\d{1,3}[.)]?\s+)?(?<art>[A-Z][A-Z0-9\/-]{2,})\s+(?<colour>[A-Z][A-Z -]{1,40}?)\s+(?<size>\d{1,2}\s*[Xx-]\s*\d{1,2})\b/i', $line)) {
-                $starts[] = $i;
+            if ($this->indianHeader($line) !== null) {
+                $starts[$i] = true;
+            }
+
+            // Some PDF readers emit the serial number on its own line and put
+            // a wrapped description below it. Keep that row boundary too.
+            if (preg_match('/^\d{1,3}[.)]?\s*$/', $line)
+                && $this->indianHeader(implode(' ', array_slice($lines, $i, 4))) !== null) {
+                $starts[$i] = true;
             }
         }
         if (!$starts) return [];
 
+        $starts = array_keys($starts);
+        sort($starts, SORT_NUMERIC);
         $items = [];
+
         foreach ($starts as $pos => $start) {
             $end = $starts[$pos + 1] ?? count($lines);
             $block = array_slice($lines, $start, $end - $start);
-            if (!preg_match('/^(?:\d{1,3}[.)]?\s+)?(?<art>[A-Z][A-Z0-9\/-]{2,})\s+(?<colour>[A-Z][A-Z -]{1,40}?)\s+(?<size>\d{1,2}\s*[Xx-]\s*\d{1,2})\b/i', $block[0], $head)) continue;
+            $block = $this->indianProductBlock($block);
+            $joined = trim((string) preg_replace('/\s+/', ' ', implode(' ', $block)));
+            $head = $this->indianHeader($joined);
+            if ($head === null) continue;
 
-            $hsnAt = null;
-            foreach ($block as $i => $value) {
-                if (preg_match('/^\d{4,8}$/', trim($value))) { $hsnAt = $i; break; }
-            }
-            $joined = implode(' ', $block);
-            if ($hsnAt === null && preg_match('/\b(?<price>\d+(?:\.\d{1,2})?)\s+(?<hsn>\d{4,8})\s+(?<qty>\d+)\s*nos?\b.*?(?<amount>\d{1,3}(?:,\d{3})*(?:\.\d{1,2}))\b/i', $joined, $compact)) {
-                $size = preg_replace('/\s*[Xx-]\s*/', '-', $head['size']);
-                $items[] = ['brand_name' => '', 'art_no' => strtoupper($head['art']), 'colour' => strtoupper(trim($head['colour'])),
-                    'size_set_label' => $size, 'pairs_per_set' => 0, 'quantity_sets' => 0,
-                    'quantity_pairs' => (int) $compact['qty'], 'unit_price' => (float) $compact['price'],
-                    'line_total' => (float) str_replace(',', '', $compact['amount']), 'hsn_sac' => $compact['hsn'], 'discount_percent' => 0.0];
-                continue;
-            }
-            // A recognised HSN/SAC is metadata only: it can never be a rate,
-            // quantity, product code, weight, or invoice total.
-            if ($hsnAt === null) continue;
-            $price = 0.0;
-            for ($i = $hsnAt - 1; $i > 0; $i--) {
-                if (preg_match('/^\d+(?:\.\d{1,2})?$/', trim($block[$i]))) { $price = (float) $block[$i]; break; }
-            }
-            $qty = 0;
-            foreach ($block as $value) {
-                if (preg_match('/^(\d+)\s*(?:nos?|pairs?|pcs?)\b/i', trim($value), $m)) { $qty = (int) $m[1]; break; }
-            }
+            $afterHeader = trim(substr($joined, $head['end']));
+            if (!preg_match('/\b(?<hsn>\d{4,8})\b/', $afterHeader, $hsn)) continue;
+            if (!preg_match('/\b(?<quantity>\d{1,6})\s*(?:nos?|pairs?|pcs?)\b/i', $afterHeader, $qty)) continue;
+
+            $price = $this->indianProductPrice($afterHeader);
+            $amount = $this->indianLineAmount($afterHeader);
+            if ($price <= 0 || $amount <= 0) continue;
+
             $discount = 0.0;
-            foreach ($block as $value) if (preg_match('/^(\d+(?:\.\d+)?)\s*%$/', trim($value), $m)) { $discount = (float) $m[1]; break; }
-            $amount = 0.0;
-            for ($i = $hsnAt + 1; $i < count($block); $i++) {
-                if (preg_match('/^\d{1,3}(?:,\d{3})*(?:\.\d{1,2})$/', trim($block[$i]))) { $amount = (float) str_replace(',', '', $block[$i]); break; }
+            if (preg_match('/\b(?<discount>\d+(?:\.\d+)?)\s*%/', $afterHeader, $discountMatch)) {
+                $discount = (float) $discountMatch['discount'];
             }
-            if ($qty <= 0 || $price <= 0 || $amount <= 0) continue;
-            $size = preg_replace('/\s*[Xx-]\s*/', '-', $head['size']);
-            $items[] = ['brand_name' => '', 'art_no' => strtoupper($head['art']), 'colour' => strtoupper(trim($head['colour'])),
-                'size_set_label' => $size, 'pairs_per_set' => 0, 'quantity_sets' => 0,
-                'quantity_pairs' => $qty, 'unit_price' => $price, 'line_total' => $amount,
-                'hsn_sac' => trim($block[$hsnAt]), 'discount_percent' => $discount];
+
+            $items[] = [
+                'brand_name'     => '',
+                'art_no'         => strtoupper($head['art']),
+                'colour'         => strtoupper(trim($head['colour'])),
+                // Preserve the supplier's written X format (for example 05X08)
+                // on the verification screen; catalogue matching normalises it.
+                'size_set_label' => $this->indianSizeLabel($head['size']),
+                'pairs_per_set'  => 0,
+                'quantity_sets'  => 0,
+                'quantity_pairs' => (int) $qty['quantity'],
+                'unit_price'     => $price,
+                'line_total'     => $amount,
+                'hsn_sac'        => $hsn['hsn'],
+                'discount_percent' => $discount,
+            ];
         }
+
         return $items;
+    }
+
+    /** @return array{art:string,colour:string,size:string,end:int}|null */
+    private function indianHeader(string $text): ?array
+    {
+        $pattern = '/(?:^|\s)(?:\d{1,3}[.)]?\s+)?(?<art>[A-Z][A-Z0-9\/-]{2,})\s+(?<colour>[A-Z][A-Z -]{1,40}?)\s+(?<size>[0-9O]{1,2}\s*[Xx-]\s*[0-9O]{1,2})\b/i';
+        if (!preg_match($pattern, $text, $match, PREG_OFFSET_CAPTURE)) {
+            return null;
+        }
+
+        return [
+            'art'    => $match['art'][0],
+            'colour' => $match['colour'][0],
+            'size'   => $match['size'][0],
+            'end'    => $match[0][1] + strlen($match[0][0]),
+        ];
+    }
+
+    /** Drop invoice totals/tax rows from the final product's block. */
+    private function indianProductBlock(array $block): array
+    {
+        foreach ($block as $i => $line) {
+            if ($i > 0 && preg_match('/\b(?:cgst|sgst|igst|round\s*off|grand\s*total|taxable\s+value|amount\s+in\s+words)\b/i', $line)) {
+                return array_slice($block, 0, $i);
+            }
+        }
+        return $block;
+    }
+
+    /** The second numeric value after the size is the Indian catalogue MRP. */
+    private function indianProductPrice(string $afterHeader): float
+    {
+        $values = $this->indianNumericValues($afterHeader);
+        if (count($values) >= 2 && $values[0] > 0 && $values[0] < 1000 && $values[1] > 0 && $values[1] < 10000) {
+            return $values[1];
+        }
+
+        // A wrapped description can follow the visible row amount, e.g.
+        // "... 2,852.85 30 309". Read its final two values instead.
+        if (preg_match('/\b\d{1,3}(?:,\d{3})+(?:\.\d{1,2})\b/', $afterHeader, $amount, PREG_OFFSET_CAPTURE)) {
+            $tail = substr($afterHeader, $amount[0][1] + strlen($amount[0][0]));
+            $values = $this->indianNumericValues($tail);
+            if (count($values) >= 2 && $values[0] > 0 && $values[0] < 1000 && $values[1] > 0 && $values[1] < 10000) {
+                return $values[1];
+            }
+        }
+
+        return 0.0;
+    }
+
+    /** The comma-formatted amount is the invoice line amount, not the rate. */
+    private function indianLineAmount(string $afterHeader): float
+    {
+        if (preg_match('/\b(?<amount>\d{1,3}(?:,\d{3})+(?:\.\d{1,2}))\b/', $afterHeader, $match)) {
+            return (float) str_replace(',', '', $match['amount']);
+        }
+
+        // Small invoice lines may not include a thousands comma. In that case
+        // the last decimal value is safer than the preceding supplier rate.
+        if (preg_match_all('/\b\d+(?:\.\d{2})\b/', $afterHeader, $matches) && $matches[0]) {
+            return (float) end($matches[0]);
+        }
+
+        return 0.0;
+    }
+
+    /** @return float[] */
+    private function indianNumericValues(string $text): array
+    {
+        if (!preg_match_all('/(?<![A-Za-z0-9.])(?:\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)(?![A-Za-z0-9.])/', $text, $matches)) {
+            return [];
+        }
+        return array_map(static fn ($value) => (float) str_replace(',', '', $value), $matches[0]);
+    }
+
+    private function indianSizeLabel(string $size): string
+    {
+        return str_replace('O', '0', strtoupper((string) preg_replace('/\s+/', '', $size)));
     }
 
     private function supplierName(array $lines): string

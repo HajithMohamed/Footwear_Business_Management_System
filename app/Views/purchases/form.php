@@ -2,7 +2,15 @@
 use App\Models\Purchase;
 
 $items = $draft['items'] ?? [];
-$normaliseSize = static fn ($value) => strtolower(preg_replace('/[^0-9a-z]/i', '', (string) $value));
+$normaliseSize = static function ($value): string {
+    $value = trim((string) $value);
+    // Treat the supplier's 05X08 as the same catalogue range as 5-8, while
+    // leaving the original invoice text visible for the owner to review.
+    if (preg_match('/^0*(\d{1,2})\s*(?:[Xx-])\s*0*(\d{1,2})$/', $value, $match)) {
+        return (int) $match[1] . '-' . (int) $match[2];
+    }
+    return strtolower((string) preg_replace('/[^0-9a-z]/i', '', $value));
+};
 $sizeCandidates = [];
 foreach ($sizeSets as $set) {
     $sizeCandidates[$normaliseSize($set['label'])][] = $set;
@@ -117,7 +125,7 @@ if (!$rows) {
             if (row.size_set_id === "__new__" && !row.new_size_set) row.new_size_set = row.size_set_label;
             return;
           }
-          row.size_set_label = selected.label;
+          if (!row.size_set_label) row.size_set_label = selected.label;
           row.category_id = selected.category_id;
           row.pairs_per_set = selected.pairs;
         },
@@ -191,7 +199,7 @@ if (!$rows) {
       <p class="text-sm font-semibold text-slate-700">Products</p>
       <span class="text-xs text-slate-400" x-text="rows.length + ' line' + (rows.length === 1 ? '' : 's')"></span>
     </div>
-    <p class="mb-3 rounded-xl bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">OCR fills article number, size, colour, Indian MRP and pair count. Before confirming, choose a brand and match the category/size set. If one is missing, select <strong>Add new</strong> to save it to the database.</p>
+    <p class="mb-3 rounded-xl bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">OCR fills article number, colour, invoice size set, Indian MRP and total pieces. Before confirming, choose a brand and match the category/size set. If one is missing, select <strong>Add new</strong> to save it to the database.</p>
     <?php if ($msg = error('items')): ?><p class="mb-2 text-xs text-red-600"><?= e($msg) ?></p><?php endif; ?>
 
     <div class="space-y-3">
@@ -212,6 +220,7 @@ if (!$rows) {
           </div>
 
           <div class="grid grid-cols-2 gap-2">
+            <p class="col-span-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">Catalogue mapping</p>
             <select x-model="row.brand_id" name="item_brand_id[]" required class="col-span-2 rounded-lg border-slate-200 bg-white px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
               <option value="">Choose brand *</option>
               <?php foreach ($brands as $brand): ?>
@@ -222,10 +231,20 @@ if (!$rows) {
             <input x-show="row.brand_id === '__new__'" x-model="row.new_brand" name="item_new_brand[]" :required="row.brand_id === '__new__'" placeholder="New brand name"
                    class="col-span-2 rounded-lg border-brand-200 px-2.5 py-1.5 text-sm ring-1 ring-brand-200">
             <input type="hidden" x-model="row.brand_name" name="item_brand_name[]">
-            <input x-model="row.art_no" name="item_art_no[]" list="art-no-list" placeholder="Art no" autocomplete="off"
-                   class="rounded-lg border-slate-200 px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
-            <input x-model="row.colour" name="item_colour[]" list="colours-list" placeholder="Colour" autocomplete="off"
-                   class="rounded-lg border-slate-200 px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
+            <p class="col-span-2 mt-1 text-[10px] font-bold uppercase tracking-wide text-brand-600">Scanned product details</p>
+            <label class="block text-[10px] font-medium text-slate-500">Article no.
+              <input x-model="row.art_no" name="item_art_no[]" list="art-no-list" placeholder="Article no." autocomplete="off"
+                     class="mt-1 w-full rounded-lg border-slate-200 px-2.5 py-1.5 text-sm text-slate-800 ring-1 ring-slate-200">
+            </label>
+            <label class="block text-[10px] font-medium text-slate-500">Colour
+              <input x-model="row.colour" name="item_colour[]" list="colours-list" placeholder="Colour" autocomplete="off"
+                     class="mt-1 w-full rounded-lg border-slate-200 px-2.5 py-1.5 text-sm text-slate-800 ring-1 ring-slate-200">
+            </label>
+            <label class="col-span-2 block text-[10px] font-medium text-slate-500">Size set (as on invoice)
+              <input x-model="row.size_set_label" name="item_size_set_label[]" placeholder="e.g. 05X08"
+                     class="mt-1 w-full rounded-lg border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-800 ring-1 ring-slate-200">
+            </label>
+            <p class="col-span-2 mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">Inventory mapping</p>
             <select x-model="row.category_id" name="item_category_id[]" class="rounded-lg border-slate-200 bg-white px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
               <option value="">Choose category *</option>
               <?php foreach ($categories as $category): ?>
@@ -248,17 +267,22 @@ if (!$rows) {
               <input x-model="row.new_size_pairs" name="item_new_size_pairs[]" type="number" min="1" :required="row.size_set_id === '__new__'" placeholder="Pairs / set"
                      class="rounded-lg border-brand-200 px-2.5 py-1.5 text-sm ring-1 ring-brand-200">
             </div>
-            <input type="hidden" x-model="row.size_set_label" name="item_size_set_label[]">
             <p x-show="!row.size_set_id && row.size_set_label" class="col-span-2 rounded-lg bg-amber-50 px-2 py-1.5 text-[10px] font-medium text-amber-700">OCR read size <span x-text="row.size_set_label"></span>. Choose the matching saved size, or choose “Add new size set”.</p>
           </div>
 
           <div class="mt-2 grid grid-cols-2 gap-2">
-            <input x-model="row.quantity_pairs" name="item_quantity_pairs[]" type="number" min="0" placeholder="Pair count"
-                   class="rounded-lg border-slate-200 px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
-            <input x-model="row.unit_price" name="item_unit_price[]" type="number" step="0.01" min="0" placeholder="Indian MRP"
-                   class="rounded-lg border-slate-200 px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
-            <input x-model="row.line_total" name="item_line_total[]" type="number" step="0.01" min="0" placeholder="Invoice line amount"
-                   class="col-span-2 rounded-lg border-slate-200 px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
+            <label class="block text-[10px] font-medium text-slate-500">Total pieces
+              <input x-model="row.quantity_pairs" name="item_quantity_pairs[]" type="number" min="0" placeholder="Total pieces"
+                     class="mt-1 w-full rounded-lg border-slate-200 px-2.5 py-1.5 text-sm text-slate-800 ring-1 ring-slate-200">
+            </label>
+            <label class="block text-[10px] font-medium text-slate-500">Indian MRP (₹)
+              <input x-model="row.unit_price" name="item_unit_price[]" type="number" step="0.01" min="0" placeholder="Indian MRP"
+                     class="mt-1 w-full rounded-lg border-slate-200 px-2.5 py-1.5 text-sm text-slate-800 ring-1 ring-slate-200">
+            </label>
+            <label class="col-span-2 block text-[10px] font-medium text-slate-500">Invoice line amount
+              <input x-model="row.line_total" name="item_line_total[]" type="number" step="0.01" min="0" placeholder="Invoice line amount"
+                     class="mt-1 w-full rounded-lg border-slate-200 px-2.5 py-1.5 text-sm text-slate-800 ring-1 ring-slate-200">
+            </label>
           </div>
           <input type="hidden" x-model="row.pairs_per_set" name="item_pairs_per_set[]">
           <input type="hidden" x-model="row.quantity_sets" name="item_quantity_sets[]">
