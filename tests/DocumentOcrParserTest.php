@@ -106,3 +106,14 @@ eq(4, count($indianInvoice['items']), 'OCR parser keeps four Indian invoice vari
 eq('N-BLUE', $indianInvoice['items'][2]['colour'], 'OCR parser keeps variant colour separate');
 eq(640299, (int) $indianInvoice['items'][0]['hsn_sac'], 'OCR parser keeps HSN separate from money');
 eq(15600.0, $indianInvoice['total_invoice_value'], 'OCR parser calculates total from lines plus GST and round-off');
+
+$wrappedRow = $parser->purchase(<<<'TEXT'
+MEENAKSHI SHOE TRADING COMPANY
+Invoice No. M/4803/26-27
+Dated 21-Aug-26
+4 WLR74018 MAROON 05X08
+30 309 640299 15 nos 209.00 nos 9 % 2,852.85
+TEXT, 'high');
+eq(1, count($wrappedRow['items']), 'OCR parser joins a wrapped PDF product description');
+eq('WLR74018', $wrappedRow['items'][0]['art_no'], 'OCR parser reads wrapped article number');
+eq('MAROON', $wrappedRow['items'][0]['colour'], 'OCR parser reads wrapped colour');

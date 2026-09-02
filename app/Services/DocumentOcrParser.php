@@ -68,7 +68,7 @@ class DocumentOcrParser
     {
         $starts = [];
         foreach ($lines as $i => $line) {
-            if (preg_match('/^(?<art>[A-Z][A-Z0-9\/-]{2,})\s+(?<colour>[A-Z][A-Z -]{1,40}?)\s+(?<size>\d{1,2}\s*[Xx-]\s*\d{1,2})\b/i', $line)) {
+            if (preg_match('/^(?:\d{1,3}[.)]?\s+)?(?<art>[A-Z][A-Z0-9\/-]{2,})\s+(?<colour>[A-Z][A-Z -]{1,40}?)\s+(?<size>\d{1,2}\s*[Xx-]\s*\d{1,2})\b/i', $line)) {
                 $starts[] = $i;
             }
         }
@@ -78,11 +78,20 @@ class DocumentOcrParser
         foreach ($starts as $pos => $start) {
             $end = $starts[$pos + 1] ?? count($lines);
             $block = array_slice($lines, $start, $end - $start);
-            if (!preg_match('/^(?<art>[A-Z][A-Z0-9\/-]{2,})\s+(?<colour>[A-Z][A-Z -]{1,40}?)\s+(?<size>\d{1,2}\s*[Xx-]\s*\d{1,2})\b/i', $block[0], $head)) continue;
+            if (!preg_match('/^(?:\d{1,3}[.)]?\s+)?(?<art>[A-Z][A-Z0-9\/-]{2,})\s+(?<colour>[A-Z][A-Z -]{1,40}?)\s+(?<size>\d{1,2}\s*[Xx-]\s*\d{1,2})\b/i', $block[0], $head)) continue;
 
             $hsnAt = null;
             foreach ($block as $i => $value) {
                 if (preg_match('/^\d{4,8}$/', trim($value))) { $hsnAt = $i; break; }
+            }
+            $joined = implode(' ', $block);
+            if ($hsnAt === null && preg_match('/\b(?<price>\d+(?:\.\d{1,2})?)\s+(?<hsn>\d{4,8})\s+(?<qty>\d+)\s*nos?\b.*?(?<amount>\d{1,3}(?:,\d{3})*(?:\.\d{1,2}))\b/i', $joined, $compact)) {
+                $size = preg_replace('/\s*[Xx-]\s*/', '-', $head['size']);
+                $items[] = ['brand_name' => '', 'art_no' => strtoupper($head['art']), 'colour' => strtoupper(trim($head['colour'])),
+                    'size_set_label' => $size, 'pairs_per_set' => 0, 'quantity_sets' => 0,
+                    'quantity_pairs' => (int) $compact['qty'], 'unit_price' => (float) $compact['price'],
+                    'line_total' => (float) str_replace(',', '', $compact['amount']), 'hsn_sac' => $compact['hsn'], 'discount_percent' => 0.0];
+                continue;
             }
             // A recognised HSN/SAC is metadata only: it can never be a rate,
             // quantity, product code, weight, or invoice total.
@@ -157,7 +166,20 @@ class DocumentOcrParser
         $items = [];
         $seen = [];
 
-        foreach ($lines as $rawLine) {
+        // A narrow description column may wrap its trailing catalogue values
+        // onto the next line. Join only that safe shape before parsing rows.
+        $normalisedLines = [];
+        for ($i = 0, $count = count($lines); $i < $count; $i++) {
+            $line = $lines[$i];
+            if ($i + 1 < $count
+                && preg_match('/\b\d{1,2}\s*[Xx-]\s*\d{1,2}\s*$/', $line)
+                && preg_match('/^\d+\s+\d+(?:\.\d+)?$/', $lines[$i + 1])) {
+                $line .= ' ' . $lines[++$i];
+            }
+            $normalisedLines[] = $line;
+        }
+
+        foreach ($normalisedLines as $rawLine) {
             $line = trim((string) preg_replace('/[|_]+/', ' ', $rawLine));
             if ($line === '' || preg_match('/(?:grand\s*total|sub\s*total|taxable|cgst|sgst|igst|discount|round\s*off|amount\s+in\s+words)/i', $line)) {
                 continue;
