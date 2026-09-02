@@ -189,6 +189,21 @@ class PurchaseController extends Controller
         ]);
     }
 
+    /** Render the editable OCR result parked by the upload request. */
+    public function importReview(Request $request, array $params): void
+    {
+        $token = preg_replace('/[^a-f0-9]/', '', (string) ($params['token'] ?? ''));
+        $key = '_invoice_review_' . $token;
+        $review = Session::get($key);
+        if (!$review || !is_array($review)) {
+            Session::flash('error', 'This invoice review expired. Please upload the invoice again.');
+            $this->redirect('purchases/import');
+        }
+        // Keep the review payload for validation redirects. It contains only the
+        // server-side draft and is isolated to this authenticated session.
+        $this->renderForm($review);
+    }
+
     /**
      * Methods 1–3: read the uploaded document, then hand the result to the
      * verification screen. A failed read is not an error — it falls through to
@@ -198,12 +213,20 @@ class PurchaseController extends Controller
     {
         $file = $request->file('document');
         if (!$file || ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+            if ($request->wantsJson()) {
+                $this->json(['success' => false, 'message' => 'Choose a PDF or image to upload.'], 422);
+                return;
+            }
             Session::flash('error', 'Choose a file to upload.');
             $this->redirect('purchases/import');
         }
 
         $storage = new StorageService();
         if ($error = $storage->validateDocument($file)) {
+            if ($request->wantsJson()) {
+                $this->json(['success' => false, 'message' => $error], 422);
+                return;
+            }
             Session::flash('error', $error);
             $this->redirect('purchases/import');
         }
@@ -230,6 +253,14 @@ class PurchaseController extends Controller
         // A calculation note must never become a purchase — keep it as a note.
         if (($result['kind'] ?? null) === 'calculation_note') {
             $attachments->update($attachmentId, ['type' => 'calculation_note']);
+            if ($request->wantsJson()) {
+                $this->json([
+                    'success' => false,
+                    'message' => 'This looks like a calculation note, not a supplier invoice. It was saved in Notes.',
+                    'data' => ['notes_url' => url('notes')],
+                ], 422);
+                return;
+            }
             Session::flash('error', $result['reason']);
             $this->redirect('notes');
         }
@@ -253,16 +284,40 @@ class PurchaseController extends Controller
             ]);
         }
 
-        $this->renderForm([
+        $duplicate = $this->purchases->findDuplicateInvoice(
+            (string) $draft['supplier_name'],
+            (string) $draft['supplier_invoice_no']
+        );
+        $review = [
             'title' => 'Verify Extracted Invoice',
             'draft' => $draft,
+            'duplicateInvoice' => $duplicate,
             'extraction' => [
                 'ok'         => $result['ok'],
                 'reason'     => $result['reason'] ?? null,
                 'confidence' => $result['ok'] ? $result['data']['confidence'] : null,
                 'summary'    => $result['ok'] ? ($result['data']['summary'] ?? []) : [],
             ],
-        ]);
+        ];
+        $token = bin2hex(random_bytes(16));
+        Session::put('_invoice_review_' . $token, $review);
+        $reviewUrl = url('purchases/import/review/' . $token);
+
+        if ($request->wantsJson()) {
+            $this->json([
+                'success' => true,
+                'message' => $result['ok']
+                    ? 'Invoice information extracted successfully.'
+                    : 'Invoice uploaded, but it could not be read automatically.',
+                'data' => [
+                    'review_url' => $reviewUrl,
+                    'extracted' => (bool) $result['ok'],
+                    'duplicate' => $duplicate,
+                ],
+            ]);
+            return;
+        }
+        $this->redirect('purchases/import/review/' . $token);
     }
 
     /** Confirm the verification screen — this is the only place a purchase is created. */
@@ -293,7 +348,21 @@ class PurchaseController extends Controller
             $this->withErrors($errors, $input);
         }
 
-        $purchaseId = $this->purchases->create([
+        $invoiceNumber = trim((string) ($input['supplier_invoice_no'] ?? ''));
+        if ($duplicate = $this->purchases->findDuplicateInvoice($supplier, $invoiceNumber)) {
+            Session::flash('error', 'This supplier invoice has already been recorded as ' . $duplicate['purchase_number'] . '.');
+            $this->redirect('purchases/' . $duplicate['id']);
+        }
+
+        try {
+            $result = Database::instance()->transaction(function () use ($input, $supplier, $purchaseDate, $asDraft, $lines): array {
+                // Recheck inside the transaction. The database unique key is the final
+                // authority if another request inserts the invoice concurrently.
+                $invoiceNumber = trim((string) ($input['supplier_invoice_no'] ?? ''));
+                if ($duplicate = $this->purchases->findDuplicateInvoice($supplier, $invoiceNumber)) {
+                    return ['duplicate' => $duplicate];
+                }
+                $purchaseId = $this->purchases->create([
             'purchase_number'       => $this->purchases->nextNumber(),
             'supplier_name'         => $supplier,
             'supplier_invoice_no'   => trim((string) ($input['supplier_invoice_no'] ?? '')) ?: null,
@@ -308,18 +377,37 @@ class PurchaseController extends Controller
             'status'                => $asDraft ? 'draft' : 'awaiting_clearance',
             'extraction_confirmed'  => !empty($input['attachment_id']) ? 1 : 0,
             'created_by'            => Auth::id(),
-        ]);
+                ]);
 
-        foreach ($lines as $index => $line) {
-            $this->items->create($line + ['purchase_id' => $purchaseId, 'sort_order' => $index]);
+                foreach ($lines as $index => $line) {
+                    $this->items->create($line + ['purchase_id' => $purchaseId, 'sort_order' => $index]);
+                }
+
+                $match = $this->items->autoMatchProducts($purchaseId);
+
+                if (!empty($input['attachment_id'])) {
+                    (new PurchaseAttachment())->attachToPurchase((int) $input['attachment_id'], $purchaseId);
+                }
+                return ['purchase_id' => $purchaseId, 'match' => $match];
+            });
+        } catch (\PDOException $e) {
+            if ((string) $e->getCode() === '23000') {
+                $duplicate = $this->purchases->findDuplicateInvoice($supplier, trim((string) ($input['supplier_invoice_no'] ?? '')));
+                if ($duplicate) {
+                    Session::flash('error', 'This supplier invoice has already been recorded as ' . $duplicate['purchase_number'] . '.');
+                    $this->redirect('purchases/' . $duplicate['id']);
+                }
+            }
+            Session::flash('error', 'The purchase could not be saved. Please check the details and try again.');
+            $this->back();
         }
 
-        // Reuse an existing product wherever the art number already exists.
-        $match = $this->items->autoMatchProducts($purchaseId);
-
-        if (!empty($input['attachment_id'])) {
-            (new PurchaseAttachment())->attachToPurchase((int) $input['attachment_id'], $purchaseId);
+        if (!empty($result['duplicate'])) {
+            Session::flash('error', 'This supplier invoice has already been recorded as ' . $result['duplicate']['purchase_number'] . '.');
+            $this->redirect('purchases/' . $result['duplicate']['id']);
         }
+        $purchaseId = (int) $result['purchase_id'];
+        $match = $result['match'];
 
         $this->log('purchase.create', 'purchase', $purchaseId, ['lines' => count($lines)]);
 

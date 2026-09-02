@@ -99,6 +99,14 @@ if (!$rows) {
   <?php endif; ?>
 <?php endif; ?>
 
+<?php if (!empty($duplicateInvoice)): ?>
+  <div class="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-800 ring-1 ring-red-200" role="alert">
+    <p class="font-semibold">This supplier invoice has already been recorded.</p>
+    <p class="mt-1 text-xs"><?= e($duplicateInvoice['purchase_number']) ?> · <?= e($duplicateInvoice['supplier_name']) ?> · <?= e($duplicateInvoice['supplier_invoice_no']) ?></p>
+    <a href="<?= e(url('purchases/' . $duplicateInvoice['id'])) ?>" class="mt-3 inline-flex min-h-11 items-center rounded-xl bg-red-700 px-4 py-2 font-semibold text-white">Open existing purchase</a>
+  </div>
+<?php endif; ?>
+
 <!-- Datalists for Autocomplete -->
 <datalist id="art-no-list">
   <?php foreach ($artNos as $artNo): ?>
@@ -113,6 +121,7 @@ if (!$rows) {
 </datalist>
 
 <form method="post" action="<?= e(url($formAction ?? 'purchases')) ?>" class="space-y-4"
+      x-on:submit="if ($el.dataset.submitting) { $event.preventDefault(); return; } $el.dataset.submitting='1'; const b=$event.submitter; if(b){b.disabled=true;b.dataset.label=b.textContent;b.textContent=b.value==='confirm'?'Creating purchase...':'Saving draft...';}"
       x-data='{
         rows: <?= e(json_encode($rows, JSON_HEX_APOS | JSON_HEX_QUOT)) ?>,
         sizeSets: <?= e(json_encode(array_map(fn ($s) => ['id' => (string) $s['id'], 'label' => $s['label'], 'category_id' => (string) ($s['category_id'] ?? ''), 'pairs' => (int) $s['default_pairs']], $sizeSets), JSON_HEX_APOS | JSON_HEX_QUOT)) ?>,
@@ -312,9 +321,9 @@ if (!$rows) {
             class="flex-1 rounded-xl bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200">
       Save as draft
     </button>
-    <button name="save_mode" value="confirm"
+    <button name="save_mode" value="confirm" <?= !empty($duplicateInvoice) ? 'disabled' : '' ?>
             class="flex-[2] rounded-xl bg-brand-600 px-4 py-3 text-sm font-semibold text-white shadow-sm active:scale-[.99]">
-      Confirm purchase
+      Confirm &amp; Create Purchase
     </button>
   </div>
   <p class="pb-2 text-center text-xs text-slate-400">

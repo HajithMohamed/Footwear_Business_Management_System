@@ -88,6 +88,7 @@ return function (Router $r): void {
     $r->get('/purchases/create',  'PurchaseController@create',     ['auth']);
     $r->get('/purchases/{id}/edit', 'PurchaseController@edit',     ['auth']);
     $r->get('/purchases/import',  'PurchaseController@importForm', ['auth']);
+    $r->get('/purchases/import/review/{token}', 'PurchaseController@importReview', ['auth']);
     $r->post('/purchases/import', 'PurchaseController@import',     ['auth']);
     $r->get('/purchases/local',   'LocalPurchaseController@create', ['auth']);
     $r->post('/purchases/local',  'LocalPurchaseController@store',  ['auth']);
@@ -153,6 +154,8 @@ return function (Router $r): void {
     // Static segments must stay ABOVE /intelligence/{classification}, or they
     // get swallowed as a classification name.
     $r->get('/customers/{customerId}/ledger',      'LedgerController@byCustomer', ['auth']);
+    $r->get('/customers/{customerId}/statement',   'LedgerController@statement', ['auth']);
+    $r->get('/customers/{customerId}/statement/pdf', 'LedgerController@statementPdf', ['auth']);
     $r->get('/intelligence',                       'LedgerController@intelligence', ['auth']);
     $r->get('/intelligence/top',                   'LedgerController@topCustomers', ['auth']);
     $r->get('/intelligence/overdue',               'LedgerController@overdue', ['auth']);
