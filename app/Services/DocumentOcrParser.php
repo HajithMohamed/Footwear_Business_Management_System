@@ -42,31 +42,106 @@ class DocumentOcrParser
     public function purchase(string $text, string $confidence = 'low'): array
     {
         $lines = array_values(array_filter(array_map('trim', preg_split('/\R+/', $text) ?: [])));
-        $items = $this->purchaseItems($lines);
-        $supplier = '';
-        foreach ($lines as $line) {
-            if (mb_strlen($line) < 4 || preg_match('/invoice|bill|tax|date|total|gst|cash memo/i', $line)) {
-                continue;
-            }
-            if (preg_match('/[A-Za-z]{3,}/', $line)) {
-                $supplier = mb_substr(preg_replace('/\s+/', ' ', $line), 0, 150);
-                break;
-            }
-        }
+        // Indian invoices are often OCR'd one table cell per line. Try that
+        // layout first, then retain the compact-row parser for other suppliers.
+        $items = $this->indianInvoiceItems($lines) ?: $this->purchaseItems($lines);
+        $summary = $this->invoiceSummary($lines, $items);
 
         return [
             'document_kind'       => 'supplier_invoice',
             'confidence'          => in_array($confidence, ['high', 'medium', 'low'], true) ? $confidence : 'low',
-            'supplier_name'       => $supplier,
+            'supplier_name'       => $this->supplierName($lines),
             'supplier_invoice_no' => $this->documentNumber($text),
             'invoice_date'        => $this->date($text),
-            'total_invoice_value' => $this->total($text),
+            'total_invoice_value' => $summary['total'],
+            'summary'             => $summary,
             'total_weight_kg'     => 0.0,
             'notes'               => $items
                 ? 'Read locally with Tesseract OCR. ' . count($items) . ' possible product line(s) were found. Verify every field before saving.'
                 : 'Read locally with Tesseract OCR. No reliable product rows were detected; enter the invoice lines before saving.',
             'items'               => $items,
         ];
+    }
+
+    /** Read a table where each column has been emitted as a separate OCR line. */
+    private function indianInvoiceItems(array $lines): array
+    {
+        $starts = [];
+        foreach ($lines as $i => $line) {
+            if (preg_match('/^(?<art>[A-Z][A-Z0-9\/-]{2,})\s+(?<colour>[A-Z][A-Z -]{1,40}?)\s+(?<size>\d{1,2}\s*[Xx-]\s*\d{1,2})\b/i', $line)) {
+                $starts[] = $i;
+            }
+        }
+        if (!$starts) return [];
+
+        $items = [];
+        foreach ($starts as $pos => $start) {
+            $end = $starts[$pos + 1] ?? count($lines);
+            $block = array_slice($lines, $start, $end - $start);
+            if (!preg_match('/^(?<art>[A-Z][A-Z0-9\/-]{2,})\s+(?<colour>[A-Z][A-Z -]{1,40}?)\s+(?<size>\d{1,2}\s*[Xx-]\s*\d{1,2})\b/i', $block[0], $head)) continue;
+
+            $hsnAt = null;
+            foreach ($block as $i => $value) {
+                if (preg_match('/^\d{4,8}$/', trim($value))) { $hsnAt = $i; break; }
+            }
+            // A recognised HSN/SAC is metadata only: it can never be a rate,
+            // quantity, product code, weight, or invoice total.
+            if ($hsnAt === null) continue;
+            $price = 0.0;
+            for ($i = $hsnAt - 1; $i > 0; $i--) {
+                if (preg_match('/^\d+(?:\.\d{1,2})?$/', trim($block[$i]))) { $price = (float) $block[$i]; break; }
+            }
+            $qty = 0;
+            foreach ($block as $value) {
+                if (preg_match('/^(\d+)\s*(?:nos?|pairs?|pcs?)\b/i', trim($value), $m)) { $qty = (int) $m[1]; break; }
+            }
+            $discount = 0.0;
+            foreach ($block as $value) if (preg_match('/^(\d+(?:\.\d+)?)\s*%$/', trim($value), $m)) { $discount = (float) $m[1]; break; }
+            $amount = 0.0;
+            for ($i = $hsnAt + 1; $i < count($block); $i++) {
+                if (preg_match('/^\d{1,3}(?:,\d{3})*(?:\.\d{1,2})$/', trim($block[$i]))) { $amount = (float) str_replace(',', '', $block[$i]); break; }
+            }
+            if ($qty <= 0 || $price <= 0 || $amount <= 0) continue;
+            $size = preg_replace('/\s*[Xx-]\s*/', '-', $head['size']);
+            $items[] = ['brand_name' => '', 'art_no' => strtoupper($head['art']), 'colour' => strtoupper(trim($head['colour'])),
+                'size_set_label' => $size, 'pairs_per_set' => 0, 'quantity_sets' => 0,
+                'quantity_pairs' => $qty, 'unit_price' => $price, 'line_total' => $amount,
+                'hsn_sac' => trim($block[$hsnAt]), 'discount_percent' => $discount];
+        }
+        return $items;
+    }
+
+    private function supplierName(array $lines): string
+    {
+        foreach ($lines as $i => $line) {
+            if (preg_match('/subject to|jurisdiction|tax invoice|gstin|state name|invoice\s*(?:no|date)|^party\b/i', $line)) continue;
+            if (preg_match('/\b(company|trading|industries|exports|footwear|enterprise)\b/i', $line)
+                && ($i + 1 < count($lines) && preg_match('/\d|street|road|nagar|chennai|address/i', $lines[$i + 1]))) {
+                return mb_substr(preg_replace('/\s+/', ' ', $line), 0, 150);
+            }
+        }
+        return '';
+    }
+
+    private function invoiceSummary(array $lines, array $items): array
+    {
+        $subtotal = round(array_sum(array_map(fn($item) => (float) ($item['line_total'] ?? 0), $items)), 2);
+        $tax = 0.0; $round = 0.0;
+        foreach ($lines as $i => $line) {
+            if (preg_match('/\b(?:cgst|sgst|igst)\b/i', $line)) $tax += $this->nearbyAmount($lines, $i);
+            if (preg_match('/round\s*off/i', $line)) $round = $this->nearbyAmount($lines, $i);
+        }
+        $calculated = $subtotal > 0 ? round($subtotal + $tax + $round, 2) : 0.0;
+        return ['subtotal' => $subtotal, 'tax' => round($tax, 2), 'round_off' => $round,
+            'total' => $calculated ?: $this->total(implode("\n", $lines))];
+    }
+
+    private function nearbyAmount(array $lines, int $start): float
+    {
+        for ($i = $start; $i <= min($start + 2, count($lines) - 1); $i++) {
+            if (preg_match('/(?:^|\s)(\d{1,3}(?:,\d{3})*(?:\.\d{1,2}))(?:\s|$)/', $lines[$i], $m)) return (float) str_replace(',', '', $m[1]);
+        }
+        return 0.0;
     }
 
     /**
@@ -211,6 +286,11 @@ class DocumentOcrParser
 
     private function date(string $text): string
     {
+        if (preg_match('/\b(?:dated|date)\s*[:.-]?\s*([0-3]?\d)\s*[- ]\s*(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s*[- ]\s*(\d{2,4})\b/i', $text, $m)) {
+            $month = date_parse($m[2])['month'] ?? 0;
+            $year = (int) $m[3]; if ($year < 100) $year += 2000;
+            if ($month && checkdate($month, (int) $m[1], $year)) return sprintf('%04d-%02d-%02d', $year, $month, (int) $m[1]);
+        }
         if (!preg_match('/\b([0-3]?\d)[.\/-]([01]?\d)[.\/-](\d{2}|\d{4})\b/', $text, $m)) {
             return '';
         }
