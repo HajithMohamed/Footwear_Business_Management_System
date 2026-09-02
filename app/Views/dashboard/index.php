@@ -79,7 +79,7 @@ elseif ($hour < 17) $greeting = 'Good Afternoon';
     <div class="quick-action-icon bg-slate-100 text-slate-600"><?= ui_icon('purchase') ?></div>
     <span>Purchase</span>
   </a>
-  <a href="<?= e(url('customers/create')) ?>" class="quick-action">
+  <a href="<?= e(url('customers')) ?>" class="quick-action">
     <div class="quick-action-icon bg-slate-100 text-slate-600"><?= ui_icon('users') ?></div>
     <span>Customer</span>
   </a>

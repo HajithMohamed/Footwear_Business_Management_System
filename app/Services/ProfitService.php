@@ -103,7 +103,10 @@ class ProfitService
         );
 
         // A cheque only counts once the bank says so.
-        [$payWhere, $payParams] = $this->window($from, $to, 'DATE(p.created_at)');
+        // Report cash on the date selected by the user. created_at is only the
+        // data-entry timestamp and makes back-dated payments appear on the wrong
+        // dashboard day.
+        [$payWhere, $payParams] = $this->window($from, $to, 'p.payment_date');
 
         $later = (float) $this->db->scalar(
             "SELECT COALESCE(SUM(p.amount), 0)
@@ -129,11 +132,23 @@ class ProfitService
      */
     public function receivables(): array
     {
+        // The ledger is the auditable source of truth. Use each customer's most
+        // recent running balance, falling back to the cached customer value only
+        // when that customer has no ledger entries yet.
         $row = $this->db->first(
-            'SELECT COALESCE(SUM(outstanding_due), 0) AS outstanding,
-                    COALESCE(SUM(outstanding_due > 0), 0) AS customers
-               FROM customers
-              WHERE deleted_at IS NULL'
+            'SELECT COALESCE(SUM(GREATEST(COALESCE(ct.running_balance, c.outstanding_due), 0)), 0) AS outstanding,
+                    COALESCE(SUM(COALESCE(ct.running_balance, c.outstanding_due) > 0), 0) AS customers
+               FROM customers c
+          LEFT JOIN customer_transactions ct
+                 ON ct.id = (
+                    SELECT ct_latest.id
+                      FROM customer_transactions ct_latest
+                     WHERE ct_latest.customer_id = c.id
+                  ORDER BY COALESCE(ct_latest.transaction_date, DATE(ct_latest.created_at)) DESC,
+                           ct_latest.created_at DESC, ct_latest.id DESC
+                     LIMIT 1
+                 )
+              WHERE c.deleted_at IS NULL'
         ) ?: [];
 
         $overdue = $this->db->first(
