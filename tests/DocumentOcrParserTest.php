@@ -104,6 +104,8 @@ eq('M/4803/26-27', $indianInvoice['supplier_invoice_no'], 'OCR parser reads Indi
 eq('2026-08-21', $indianInvoice['invoice_date'], 'OCR parser reads textual Indian invoice date');
 eq(4, count($indianInvoice['items']), 'OCR parser keeps four Indian invoice variants');
 eq('N-BLUE', $indianInvoice['items'][2]['colour'], 'OCR parser keeps variant colour separate');
+eq('WLR74018', $indianInvoice['items'][3]['art_no'], 'OCR parser keeps a repeated article as a separate invoice line');
+eq('MAROON', $indianInvoice['items'][3]['colour'], 'OCR parser keeps a repeated article colour separate');
 eq(640299, (int) $indianInvoice['items'][0]['hsn_sac'], 'OCR parser keeps HSN separate from money');
 eq(15600.0, $indianInvoice['total_invoice_value'], 'OCR parser calculates total from lines plus GST and round-off');
 

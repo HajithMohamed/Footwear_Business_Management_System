@@ -248,6 +248,9 @@ class PurchaseCosting
                     pr.final_cost       AS product_final_cost,
                     (SELECT img.thumb_path FROM product_images img
                       WHERE img.product_id = pr.id
+                        AND (TRIM(COALESCE(pi.colour, "")) = ""
+                             OR REPLACE(REPLACE(LOWER(TRIM(COALESCE(img.colour, ""))), "-", ""), " ", "")
+                                = REPLACE(REPLACE(LOWER(TRIM(pi.colour)), "-", ""), " ", ""))
                    ORDER BY img.is_main DESC, img.sort_order, img.id LIMIT 1) AS product_thumb,
                     ai.received_pairs
                FROM purchase_items pi

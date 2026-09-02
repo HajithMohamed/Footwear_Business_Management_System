@@ -223,20 +223,7 @@ class ArrivalController extends Controller
 
             $totalReceived = max(0, (int) $received[$groupKey]);
             $remark = trim((string) ($remarks[$groupKey] ?? '')) ?: null;
-            $groupItems = $group['items'];
-
-            foreach ($groupItems as $idx => $item) {
-                $id = (int) $item['id'];
-                $expected = (int) $item['expected_pairs'];
-
-                if ($idx === count($groupItems) - 1) {
-                    $this->items->setReceived($id, $totalReceived, $remark);
-                } else {
-                    $take = min($expected, $totalReceived);
-                    $this->items->setReceived($id, $take, $remark);
-                    $totalReceived -= $take;
-                }
-            }
+            $this->applyGroupReceived($group['items'], $totalReceived, $remark);
         }
 
         $this->arrivals->update($arrivalId, [
@@ -255,29 +242,37 @@ class ArrivalController extends Controller
         [$purchaseId, $arrival] = $this->resolve($params);
         $arrivalId = (int) $arrival['id'];
 
-        $input  = $request->all();
-        $itemId = (int) ($input['arrival_item_id'] ?? 0);
-        $pairs  = (int) ($input['counted_pairs'] ?? 0);
+        $input    = $request->all();
+        $groupKey = trim((string) ($input['arrival_group_key'] ?? ''));
+        $pairs    = (int) ($input['counted_pairs'] ?? 0);
 
-        $item = $this->items->find($itemId);
-        if (!$item || (int) $item['arrival_id'] !== $arrivalId) {
-            $this->abort(404, 'Line not found on this arrival.');
-        }
         if ($pairs === 0) {
             Session::flash('error', 'Enter how many pairs were counted.');
             $this->redirect('purchases/' . $purchaseId . '/arrival');
         }
 
-        (new ArrivalCount())->create([
-            'arrival_item_id' => $itemId,
+        $grouped = $this->groupItems($this->items->byArrival($arrivalId));
+        $group = $grouped[$groupKey] ?? null;
+        if (!$group || empty($group['items'])) {
+            Session::flash('error', 'Choose an article to count.');
+            $this->redirect('purchases/' . $purchaseId . '/arrival');
+        }
+
+        // Count entries keep the current schema: attach each entry to a stable
+        // representative line, then share its total across colour variants.
+        $representative = $group['items'][0];
+        $counts = new ArrivalCount();
+
+        $counts->create([
+            'arrival_item_id' => (int) $representative['id'],
             'parcel_id'       => ((int) ($input['parcel_id'] ?? 0)) ?: null,
             'counted_pairs'   => $pairs,
             'note'            => trim((string) ($input['note'] ?? '')) ?: null,
             'counted_by'      => Auth::id(),
         ]);
 
-        // The running total is the sum of the entries, never typed directly.
-        $this->items->recalcFromCounts($itemId);
+        $counted = max(0, $counts->totalForItemIds(array_column($group['items'], 'id')));
+        $this->applyGroupReceived($group['items'], $counted);
         $this->arrivals->update($arrivalId, ['counting_mode' => 'incremental']);
 
         Session::flash('success', 'Count added.');
@@ -338,7 +333,10 @@ class ArrivalController extends Controller
         $this->redirect('purchases/' . $purchaseId . '/costing');
     }
 
-    /** Group invoice lines by art number + category (colours count together). */
+    /**
+     * Group invoice lines by canonical article number for physical counting.
+     * Colours stay distinct on the invoice, but count together on arrival.
+     */
     private function groupItems(array $items): array
     {
         $grouped = [];
@@ -353,6 +351,7 @@ class ArrivalController extends Controller
                     'product_thumb'  => $item['product_thumb'],
                     'expected_pairs' => 0,
                     'received_pairs' => 0,
+                    'colours'        => [],
                     'items'          => [],
                 ];
             }
@@ -361,6 +360,10 @@ class ArrivalController extends Controller
             }
             $grouped[$key]['expected_pairs'] += (int) $item['expected_pairs'];
             $grouped[$key]['received_pairs'] += (int) $item['received_pairs'];
+            $colour = trim((string) ($item['colour'] ?? ''));
+            if ($colour !== '') {
+                $grouped[$key]['colours'][strtolower($colour)] = $colour;
+            }
             $grouped[$key]['items'][] = $item;
         }
 
@@ -376,6 +379,7 @@ class ArrivalController extends Controller
                 ? 'pending'
                 : ($diff === 0 ? 'matched' : ($diff < 0 ? 'shortage' : 'excess'));
             $group['difference'] = $diff;
+            $group['colour_summary'] = implode(', ', array_values($group['colours']));
         }
 
         return $grouped;
@@ -384,9 +388,28 @@ class ArrivalController extends Controller
     /** @param array<string,mixed> $item */
     public static function groupKey(array $item): string
     {
-        $artNo    = trim((string) ($item['art_no'] ?? '')) ?: 'Unnamed';
-        $category = trim((string) ($item['category_name'] ?? '')) ?: 'General';
-        return $artNo . '::' . $category;
+        $artNo = strtolower((string) preg_replace('/[^a-z0-9]/i', '', (string) ($item['art_no'] ?? '')));
+        if ($artNo !== '') {
+            return 'art-' . $artNo;
+        }
+
+        // Lines without an article number cannot safely be grouped together.
+        return 'line-' . (int) ($item['id'] ?? $item['purchase_item_id'] ?? 0);
+    }
+
+    /** Allocate one article-level count across its colour-specific invoice rows. */
+    private function applyGroupReceived(array $items, int $totalReceived, ?string $remark = null): void
+    {
+        $remaining = max(0, $totalReceived);
+        $last = count($items) - 1;
+
+        foreach ($items as $index => $item) {
+            $received = $index === $last
+                ? $remaining
+                : min((int) $item['expected_pairs'], $remaining);
+            $this->items->setReceived((int) $item['id'], $received, $remark);
+            $remaining -= $received;
+        }
     }
 
     /** Weight, pairs and clearance payment summary for the verification screen. */
