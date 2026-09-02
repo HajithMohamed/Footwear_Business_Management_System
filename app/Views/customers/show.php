@@ -6,7 +6,7 @@
   $daysOverdue = (int) ($customer['days_overdue'] ?? 0);
   $waPhone = whatsapp_phone($customer['phone'] ?? null);
   $requestedTab = (string) request('tab', 'summary');
-  $initialTab = in_array($requestedTab, ['summary', 'ledger', 'invoices', 'payments', 'cheques', 'analytics'], true)
+  $initialTab = in_array($requestedTab, ['summary', 'ledger', 'invoices', 'payments', 'returns', 'cheques', 'analytics'], true)
       ? $requestedTab
       : 'summary';
   
@@ -84,6 +84,7 @@
       <?= ui_icon('note', 'h-5 w-5') ?> Share Ledger
     </a>
   </div>
+  <a href="<?= e(url("customers/{$customer['id']}/returns/create")) ?>" class="mt-3 flex min-h-11 w-full items-center justify-center rounded-xl bg-white/15 text-sm font-bold text-white hover:bg-white/25">↩ Return Goods</a>
   <?php if (!empty($customer['phone'])): ?>
     <div class="mt-3 grid grid-cols-2 gap-2 border-t border-white/20 pt-3">
       <a href="tel:<?= e($customer['phone']) ?>" class="flex h-10 items-center justify-center gap-2 rounded-xl bg-white/15 text-xs font-bold text-white hover:bg-white/25">
@@ -125,6 +126,7 @@
       {id:'ledger', label:'Ledger'},
       {id:'invoices', label:'Bills'},
       {id:'payments', label:'Payments'},
+      {id:'returns', label:'Returns'},
       {id:'cheques', label:'Cheques'},
       {id:'analytics', label:'Intelligence'}
     ]">
@@ -344,6 +346,17 @@
     <?php else: ?>
       <div class="empty-state"><p class="empty-state-text">No payments recorded.</p></div>
     <?php endif; ?>
+  </div>
+
+  <!-- RETURNS TAB -->
+  <div x-show="tab === 'returns'" style="display: none;" class="space-y-4" x-transition>
+    <a href="<?= e(url("customers/{$customer['id']}/returns/create")) ?>" class="btn btn-primary btn-full min-h-12">Return Goods</a>
+    <?php if (!empty($returns)): foreach ($returns as $return): ?>
+      <a href="<?= e(url('article-transactions/'.$return['id'])) ?>" class="card card-compact block">
+        <div class="flex justify-between"><div><p class="font-bold text-slate-800"><?= e($return['transaction_no']) ?></p><p class="mt-1 text-xs text-slate-500"><?= e($return['articles']) ?> · <?= (int)$return['item_count'] ?> item(s)</p></div><div class="text-right"><p class="font-bold text-green-700">Rs. <?= number_format((float)$return['grand_total'],2) ?></p><p class="text-xs uppercase text-slate-400"><?= e(str_replace('_',' ',$return['treatment'])) ?></p></div></div>
+        <p class="mt-2 text-xs text-slate-400"><?= e(date('j M Y',strtotime($return['created_at']))) ?> · <?= e(str_replace('_',' ',$return['return_reason'])) ?></p>
+      </a>
+    <?php endforeach; else: ?><div class="empty-state"><p class="empty-state-text">No customer returns recorded.</p></div><?php endif; ?>
   </div>
 
   <!-- CHEQUES TAB -->

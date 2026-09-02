@@ -55,16 +55,41 @@ class ClearanceAssignmentController extends Controller
         $this->rejectCompletedPurchase($purchase);
 
         $input    = $request->all();
-        $personId = (int) ($input['clearance_person_id'] ?? 0);
+        $personChoice = (string) ($input['clearance_person_id'] ?? '');
+        $personId = ctype_digit($personChoice) ? (int) $personChoice : 0;
         $weight   = (float) ($input['assigned_weight_kg'] ?? 0);
-
-        if ($personId <= 0) {
-            $this->withErrors(['clearance_person_id' => ['Choose a clearance person.']], $input);
-        }
         if ($weight <= 0) {
             $this->withErrors(['assigned_weight_kg' => ['Enter the weight this person is clearing.']], $input);
         }
 
+        if ($personChoice === '__new__') {
+            $name = trim((string) ($input['new_person_name'] ?? ''));
+            $rawPhone = trim((string) ($input['new_person_phone'] ?? ''));
+            $phone = sri_lankan_phone($rawPhone);
+            if ($name === '') {
+                $this->withErrors(['clearance_person_id' => ['Enter the new clearance person name.']], $input);
+            }
+            if ($rawPhone !== '' && $phone === null) {
+                $this->withErrors(['clearance_person_id' => ['Enter a valid Sri Lankan mobile number.']], $input);
+            }
+            $personId = (new ClearancePerson())->create([
+                'name' => $name,
+                'phone' => $phone,
+                'address' => null,
+                'wage_per_kilo' => max(0, (float) ($input['new_person_rate'] ?? 0)),
+                'notes' => 'Created while assigning purchase ' . $purchase['purchase_number'],
+                'is_active' => 1,
+            ]);
+            $this->log('clearance_person.create', 'clearance_person', $personId, ['source' => 'purchase_assignment']);
+        }
+
+        if ($personId <= 0) {
+            $this->withErrors(['clearance_person_id' => ['Choose a clearance person.']], $input);
+        }
+        $selectedPerson = (new ClearancePerson())->find($personId);
+        if (!$selectedPerson || !(int) $selectedPerson['is_active']) {
+            $this->withErrors(['clearance_person_id' => ['Choose an active clearance person.']], $input);
+        }
         $this->assignments->assign($purchaseId, $personId, [
             'assigned_weight_kg' => $weight,
             'parcel_count'       => max(0, (int) ($input['parcel_count'] ?? 0)),

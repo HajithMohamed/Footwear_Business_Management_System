@@ -12,6 +12,7 @@ foreach ($images as $img) {
 $main = null;
 foreach ($images as $img) { if ($img['is_main']) { $main = $img; break; } }
 $main = $main ?: ($images[0] ?? null);
+$mainUrl = $main ? StorageService::existingImageUrl(null, $main['path'] ?? null) : null;
 
 $typeBadge = [
     'imported' => 'bg-blue-100 text-blue-700',
@@ -38,8 +39,8 @@ $fmt = fn ($v) => $v !== null && $v !== '' ? 'Rs. ' . number_format((float) $v, 
 </div>
 
 <!-- Gallery -->
-<div x-data="{ big: '<?= $main ? e(StorageService::url($main['path'])) : '' ?>' }" class="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-100">
-  <?php if ($images): ?>
+<div x-data="{ big: '<?= e($mainUrl ?? '') ?>' }" class="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-slate-100">
+  <?php if ($mainUrl): ?>
     <div class="aspect-square w-full overflow-hidden rounded-xl bg-slate-100">
       <img :src="big" alt="" class="h-full w-full object-contain">
     </div>
@@ -51,11 +52,12 @@ $fmt = fn ($v) => $v !== null && $v !== '' ? 'Rs. ' . number_format((float) $v, 
         </p>
         <div class="grid grid-cols-5 gap-2">
           <?php foreach ($imgs as $img): ?>
-            <button type="button" @click="big='<?= e(StorageService::url($img['path'])) ?>'"
+            <?php $galleryUrl = StorageService::existingImageUrl($img['thumb_path'] ?? null, $img['path'] ?? null); $galleryOriginal = StorageService::existingImageUrl(null, $img['path'] ?? null); ?>
+            <?php if ($galleryUrl && $galleryOriginal): ?><button type="button" @click="big='<?= e($galleryOriginal) ?>'"
                     class="relative aspect-square overflow-hidden rounded-lg ring-1 ring-slate-100 active:scale-95">
-              <img src="<?= e(StorageService::url($img['thumb_path'] ?: $img['path'])) ?>" alt="" loading="lazy" class="h-full w-full object-cover">
+              <img src="<?= e($galleryUrl) ?>" alt="" loading="lazy" class="h-full w-full object-cover">
               <?php if ($img['is_main']): ?><span class="absolute bottom-0 inset-x-0 bg-brand-600/80 text-white text-[8px] text-center">main</span><?php endif; ?>
-            </button>
+            </button><?php endif; ?>
           <?php endforeach; ?>
         </div>
       </div>

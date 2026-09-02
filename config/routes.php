@@ -41,6 +41,15 @@ return function (Router $r): void {
     $r->post('/products/{id}/images/{imageId}',        'ProductController@updateImage', ['auth']);
     $r->post('/products/{id}/images/{imageId}/delete', 'ProductController@deleteImage', ['auth']);
 
+    // --- Flexible article transactions, returns and audited stock changes ---
+    $r->get('/articles/search',                 'ArticleTransactionController@searchArticles', ['auth']);
+    $r->get('/returns/create',                  'ArticleTransactionController@returnCreate', ['auth']);
+    $r->get('/customers/{customerId}/returns/create', 'ArticleTransactionController@returnCreate', ['auth']);
+    $r->post('/returns',                        'ArticleTransactionController@returnStore', ['auth']);
+    $r->get('/stock-adjustments/create',        'ArticleTransactionController@stockCreate', ['auth']);
+    $r->post('/stock-adjustments',              'ArticleTransactionController@stockStore', ['auth']);
+    $r->get('/article-transactions/{id}',       'ArticleTransactionController@show', ['auth']);
+
     // --- Customers -----------------------------------------------------------
     $r->get('/customers',             'CustomerController@index',  ['auth']);
     $r->get('/customers/create',      'CustomerController@create', ['auth']);

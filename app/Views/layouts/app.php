@@ -25,20 +25,7 @@ $navActive = function (string $prefix) use ($currentPath): string {
     <meta name="theme-color" content="#0f2557">
     <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
     <title><?= e($title ?? 'Shoe Bank') ?> · <?= e(config('app.name')) ?></title>
-    <!-- Tailwind via CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
-            colors: {
-              brand: { 50:'#eff6ff', 100:'#dbeafe', 400:'#60a5fa', 500:'#3b82f6', 600:'#1E3A8A', 700:'#1e40af', 900:'#0f2557' }
-            }
-          }
-        }
-      };
-    </script>
+    <link rel="stylesheet" href="<?= e(asset('css/tailwind.css')) ?>">
     <!-- Alpine.js -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <!-- App CSS (Design System) -->

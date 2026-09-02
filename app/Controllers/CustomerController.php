@@ -115,6 +115,7 @@ class CustomerController extends Controller
         
         $chequeModel = new \App\Models\Cheque();
         $cheques = $chequeModel->byCustomer($id);
+        $returns = (new \App\Models\ArticleTransaction())->byCustomer($id);
 
         $this->view('customers/show', [
             'title' => $customer['name'],
@@ -126,6 +127,7 @@ class CustomerController extends Controller
             'invoices' => $invoices,
             'payments' => $payments,
             'cheques' => $cheques,
+            'returns' => $returns,
         ]);
     }
 
