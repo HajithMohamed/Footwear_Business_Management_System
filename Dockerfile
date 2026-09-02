@@ -4,7 +4,10 @@
 FROM node:20-alpine AS assets
 WORKDIR /build
 COPY package.json package-lock.json ./
-RUN npm ci
+# The lockfile is generated with npm 11. Pin the same npm release in Linux;
+# npm 10.8.2 incorrectly rejects the valid nested picomatch resolutions.
+RUN npm install --global npm@11.14.1 \
+    && npm ci --ignore-scripts --no-audit --no-fund
 COPY tailwind.config.js ./
 COPY app/Views ./app/Views
 COPY app/Helpers ./app/Helpers
