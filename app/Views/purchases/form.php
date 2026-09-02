@@ -69,14 +69,17 @@ if (!$rows) {
     ?>
     <div class="mb-4 rounded-xl px-4 py-3 text-sm ring-1 <?= $tone ?>">
       <p class="font-semibold">
-        <?= $conf === 'high' ? '✓ Invoice read clearly' : ($conf === 'medium' ? '⚠ Invoice read — check carefully' : '⚠ Hard to read — check every line') ?>
+        <?= $conf === 'high' ? 'Invoice scanned — review required' : ($conf === 'medium' ? 'Invoice scanned — check carefully' : 'Hard to read — check every line') ?>
       </p>
       <p class="mt-0.5 text-xs opacity-90">
-        Confidence: <?= e(ucfirst($conf)) ?>. Nothing has been saved. Correct anything below, then confirm.
+        Suggested confidence: <?= e(ucfirst($conf)) ?>. Nothing has been saved. Correct anything below, then confirm.
       </p>
       <p class="mt-1.5 text-xs font-semibold"><?= count($draft['items'] ?? []) ?> product line(s) suggested from this scan.</p>
       <?php if (!empty($draft['notes'])): ?>
         <p class="mt-1.5 text-xs opacity-80">Reader's note: <?= e($draft['notes']) ?></p>
+      <?php endif; ?>
+      <?php if (!empty($extraction['summary']['subtotal'])): ?>
+        <p class="mt-2 text-xs">Lines: Rs. <?= e(number_format((float) $extraction['summary']['subtotal'], 2)) ?> · Tax: Rs. <?= e(number_format((float) ($extraction['summary']['tax'] ?? 0), 2)) ?> · Total: Rs. <?= e(number_format((float) ($extraction['summary']['total'] ?? 0), 2)) ?></p>
       <?php endif; ?>
     </div>
   <?php else: ?>
@@ -254,10 +257,11 @@ if (!$rows) {
                    class="rounded-lg border-slate-200 px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
             <input x-model="row.unit_price" name="item_unit_price[]" type="number" step="0.01" min="0" placeholder="Indian MRP"
                    class="rounded-lg border-slate-200 px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
+            <input x-model="row.line_total" name="item_line_total[]" type="number" step="0.01" min="0" placeholder="Invoice line amount"
+                   class="col-span-2 rounded-lg border-slate-200 px-2.5 py-1.5 text-sm ring-1 ring-slate-200">
           </div>
           <input type="hidden" x-model="row.pairs_per_set" name="item_pairs_per_set[]">
           <input type="hidden" x-model="row.quantity_sets" name="item_quantity_sets[]">
-          <input type="hidden" x-model="row.line_total" name="item_line_total[]">
         </div>
       </template>
     </div>

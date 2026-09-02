@@ -260,6 +260,7 @@ class PurchaseController extends Controller
                 'ok'         => $result['ok'],
                 'reason'     => $result['reason'] ?? null,
                 'confidence' => $result['ok'] ? $result['data']['confidence'] : null,
+                'summary'    => $result['ok'] ? ($result['data']['summary'] ?? []) : [],
             ],
         ]);
     }
