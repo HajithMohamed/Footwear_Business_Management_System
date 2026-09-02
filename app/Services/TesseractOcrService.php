@@ -13,14 +13,17 @@ class TesseractOcrService
 {
     private string $tesseract;
     private string $pdfToPpm;
+    private string $pdfToText;
     private static ?bool $available = null;
 
     public function __construct()
     {
         $defaultTesseract = is_executable('/usr/bin/tesseract') ? '/usr/bin/tesseract' : 'tesseract';
         $defaultPdfToPpm = is_executable('/usr/bin/pdftoppm') ? '/usr/bin/pdftoppm' : 'pdftoppm';
+        $defaultPdfToText = is_executable('/usr/bin/pdftotext') ? '/usr/bin/pdftotext' : 'pdftotext';
         $this->tesseract = trim((string) env('TESSERACT_PATH', $defaultTesseract)) ?: $defaultTesseract;
         $this->pdfToPpm = trim((string) env('PDFTOPPM_PATH', $defaultPdfToPpm)) ?: $defaultPdfToPpm;
+        $this->pdfToText = trim((string) env('PDFTOTEXT_PATH', $defaultPdfToText)) ?: $defaultPdfToText;
     }
 
     public function isAvailable(): bool
@@ -46,6 +49,14 @@ class TesseractOcrService
         $temporary = [];
         try {
             if (strtolower($mimeType) === 'application/pdf') {
+                // Tally and many supplier PDFs have a real text layer. Preserve
+                // its column layout before falling back to bitmap OCR; rasterizing
+                // first can scramble product rows and HSN/SAC columns.
+                $native = $this->run([$this->pdfToText, '-layout', $path, '-']);
+                $nativeText = trim($native['stdout']);
+                if ($native['exit'] === 0 && preg_match_all('/[A-Za-z0-9]{2,}/', $nativeText) >= 20) {
+                    return ['ok' => true, 'text' => $nativeText, 'confidence' => 'high'];
+                }
                 $prefix = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'shoe_bank_ocr_' . bin2hex(random_bytes(8));
                 $converted = $this->run([$this->pdfToPpm, '-f', '1', '-singlefile', '-r', '220', '-png', $path, $prefix]);
                 $source = $prefix . '.png';
