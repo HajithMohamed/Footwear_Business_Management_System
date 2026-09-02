@@ -51,6 +51,9 @@ class Product extends Model
                     (SELECT thumb_path FROM product_images pi
                       WHERE FIND_IN_SET(pi.product_id, pg.product_ids)
                    ORDER BY pi.is_main DESC, pi.sort_order, pi.id LIMIT 1) AS main_thumb,
+                    (SELECT path FROM product_images pi
+                      WHERE FIND_IN_SET(pi.product_id, pg.product_ids)
+                   ORDER BY pi.is_main DESC, pi.sort_order, pi.id LIMIT 1) AS main_image,
                     (SELECT GROUP_CONCAT(DISTINCT pi2.colour ORDER BY pi2.colour SEPARATOR ', ')
                        FROM product_images pi2
                       WHERE FIND_IN_SET(pi2.product_id, pg.product_ids) AND pi2.colour IS NOT NULL AND pi2.colour <> '') AS image_colours,

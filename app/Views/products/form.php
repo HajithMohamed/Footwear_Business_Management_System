@@ -211,8 +211,9 @@ $init = json_encode([
       <p class="text-[11px] text-slate-400">Set a colour name per image and choose the main image.</p>
       <div class="space-y-2">
         <?php foreach ($product['images'] as $img): ?>
+          <?php $editImageUrl = StorageService::existingImageUrl($img['thumb_path'] ?? null, $img['path'] ?? null); ?>
           <div class="flex items-center gap-2 rounded-xl border border-slate-100 p-2">
-            <img src="<?= e(StorageService::url($img['thumb_path'] ?: $img['path'])) ?>" alt="" class="h-14 w-14 shrink-0 rounded-lg object-cover ring-1 ring-slate-100">
+            <?php if ($editImageUrl): ?><img src="<?= e($editImageUrl) ?>" alt="" class="h-14 w-14 shrink-0 rounded-lg object-cover ring-1 ring-slate-100"><?php else: ?><div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-[10px] text-slate-500">Missing</div><?php endif; ?>
             <div class="flex flex-1 items-center gap-2">
               <input form="imgform<?= (int)$img['id'] ?>" name="colour" value="<?= e($img['colour']) ?>" list="invoice-colours" placeholder="Colour name"
                      class="min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-sm">

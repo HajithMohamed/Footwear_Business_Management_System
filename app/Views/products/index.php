@@ -63,10 +63,12 @@ $qs = function (array $overrides) use ($filters): string {
 <?php else: ?>
   <div class="grid grid-cols-2 gap-3">
     <?php foreach ($result['rows'] as $p): ?>
+      <?php $productImageUrl = StorageService::existingImageUrl($p['main_thumb'] ?? null, $p['main_image'] ?? null); ?>
       <a href="<?= e(url('products/'.$p['id'])) ?>" class="group rounded-2xl bg-white shadow-sm ring-1 ring-slate-100 overflow-hidden active:scale-[.99] transition">
         <div class="aspect-square bg-slate-100 flex items-center justify-center overflow-hidden">
-          <?php if (!empty($p['main_thumb'])): ?>
-            <img src="<?= e(StorageService::url($p['main_thumb'])) ?>" alt="" loading="lazy" class="h-full w-full object-cover">
+          <?php if ($productImageUrl): ?>
+            <img src="<?= e($productImageUrl) ?>" alt="" loading="lazy" class="h-full w-full object-cover" onerror="this.hidden=true;this.nextElementSibling.hidden=false">
+            <div hidden class="flex h-full w-full flex-col items-center justify-center gap-2 bg-slate-50 text-slate-400"><span class="text-xs font-semibold">Image unavailable</span></div>
           <?php else: ?>
             <div class="flex h-full w-full flex-col items-center justify-center gap-2 bg-slate-50 text-slate-400">
               <svg class="h-8 w-8" fill="none" stroke="currentColor" stroke-width="1.7" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Z"/></svg>
@@ -109,7 +111,7 @@ $qs = function (array $overrides) use ($filters): string {
               <span class="text-[10px] text-slate-400">Rate: <?= e($p['lkr_rate_used'] ?? '—') ?></span>
             </div>
           <?php endif; ?>
-          <?php if (empty($p['main_thumb'])): ?>
+          <?php if (!$productImageUrl): ?>
             <span class="mt-2 block rounded-lg bg-amber-50 px-2 py-1.5 text-center text-[10px] font-bold text-amber-700 ring-1 ring-amber-100">Product image missing · Add image</span>
           <?php endif; ?>
         </div>
