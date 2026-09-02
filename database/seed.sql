@@ -159,37 +159,3 @@ INSERT INTO suppliers (name, country, contact_person, email, phone, address, cit
     ('Brano Manufacturing', 'India', 'Amit Patel', 'amit@brano.in', '+91-9876543211', '45 Factory Road', 'Delhi', 'Good quality, on-time delivery', 1),
     ('OfFoam Exports', 'India', 'Priya Singh', 'priya@offoam.in', '+91-9876543212', '67 Industrial Zone', 'Bangalore', 'Casual footwear specialist', 1)
 ON DUPLICATE KEY UPDATE country = VALUES(country);
-
--- Sample purchase orders -------------------------------------------------------
-INSERT INTO purchase_orders (supplier_id, po_number, po_date, expected_arrival, status, total_inr, total_lkr, notes, created_by) VALUES
-    ((SELECT id FROM suppliers WHERE name='Walkaro Industries'), 'PO-2026-001', '2026-06-15', '2026-07-10', 'cleared', 2500000, 900000, 'Mix of gents & ladies shoes', 1),
-    ((SELECT id FROM suppliers WHERE name='Brano Manufacturing'),  'PO-2026-002', '2026-06-20', '2026-07-15', 'arrived', 1800000, 648000, 'Summer collection order', 1),
-    ((SELECT id FROM suppliers WHERE name='OfFoam Exports'),       'PO-2026-003', '2026-07-01', '2026-07-25', 'shipped', 1200000, 432000, 'Casual line expansion', 1),
-    ((SELECT id FROM suppliers WHERE name='Walkaro Industries'), 'PO-2026-004', '2026-07-05', '2026-08-05', 'confirmed', 3000000, 1080000, 'Fall season pre-order', 1)
-ON DUPLICATE KEY UPDATE status = VALUES(status);
-
--- Sample PO items (products ordered) -----------------------------------------------
-INSERT INTO po_items (po_id, product_id, quantity_sets, indian_price, discount_percent, line_total_inr) VALUES
-    ((SELECT id FROM purchase_orders WHERE po_number='PO-2026-001'),
-     (SELECT id FROM products LIMIT 1), 100, 1500, 15, 127500),
-    ((SELECT id FROM purchase_orders WHERE po_number='PO-2026-001'),
-     (SELECT id FROM products LIMIT 1 OFFSET 1), 80, 1800, 10, 129600),
-    ((SELECT id FROM purchase_orders WHERE po_number='PO-2026-002'),
-     (SELECT id FROM products LIMIT 1 OFFSET 2), 60, 2000, 12, 105600),
-    ((SELECT id FROM purchase_orders WHERE po_number='PO-2026-003'),
-     (SELECT id FROM products LIMIT 1), 40, 1400, 15, 47600)
-ON DUPLICATE KEY UPDATE line_total_inr = VALUES(line_total_inr);
-
--- Sample goods arrivals (shipment receipts) -----------------------------------------------
-INSERT INTO goods_arrivals (po_id, arrival_ref, arrival_date, received_by, total_sets_received, status, notes) VALUES
-    ((SELECT id FROM purchase_orders WHERE po_number='PO-2026-001'), 'ARR-2026-001', '2026-07-10', 1, 180, 'completed', 'All items received in good condition'),
-    ((SELECT id FROM purchase_orders WHERE po_number='PO-2026-002'), 'ARR-2026-002', '2026-07-16', 1, 60, 'completed', 'Received & inspected'),
-    ((SELECT id FROM purchase_orders WHERE po_number='PO-2026-003'), 'ARR-2026-003', '2026-07-26', 1, 0, 'pending', 'Awaiting shipment arrival')
-ON DUPLICATE KEY UPDATE status = VALUES(status);
-
--- Sample clearance documents (customs clearance) -----------------------------------------------
-INSERT INTO clearance_docs (po_id, clearance_ref, clearance_date, customs_value, clearance_cost, clearance_rate, final_cost_lkr, status, cleared_by, verified_date, notes) VALUES
-    ((SELECT id FROM purchase_orders WHERE po_number='PO-2026-001'), 'CLR-2026-001', '2026-07-12', 2500000, 120000, 3.60, 1020000, 'cleared', 1, '2026-07-12', 'Cleared without issues'),
-    ((SELECT id FROM purchase_orders WHERE po_number='PO-2026-002'), 'CLR-2026-002', '2026-07-18', 1800000, 95000, 3.60, 743000, 'cleared', 1, '2026-07-18', 'Standard clearance'),
-    ((SELECT id FROM purchase_orders WHERE po_number='PO-2026-003'), 'CLR-2026-003', '2026-07-28', 1200000, 70000, 3.65, 438200, 'pending', NULL, NULL, 'Awaiting customs approval')
-ON DUPLICATE KEY UPDATE status = VALUES(status);
