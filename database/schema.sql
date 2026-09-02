@@ -59,6 +59,28 @@ CREATE TABLE IF NOT EXISTS categories (
     UNIQUE KEY uq_categories_name (name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Supplier directory retained for the initial reference data. Import purchases
+-- store the invoice supplier name directly, while this table remains available
+-- for supplier records and historical seed data.
+CREATE TABLE IF NOT EXISTS suppliers (
+    id             INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    name           VARCHAR(150) NOT NULL,
+    country        VARCHAR(80) NULL,
+    contact_person VARCHAR(100) NULL,
+    email          VARCHAR(100) NULL,
+    phone          VARCHAR(30) NULL,
+    address        TEXT NULL,
+    city           VARCHAR(80) NULL,
+    notes          TEXT NULL,
+    created_by     INT UNSIGNED NULL,
+    created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_suppliers_name (name),
+    KEY idx_suppliers_created_by (created_by),
+    CONSTRAINT fk_suppliers_created_by FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS size_sets (
     id            SMALLINT UNSIGNED NOT NULL AUTO_INCREMENT,
     category_id   SMALLINT UNSIGNED NULL,
