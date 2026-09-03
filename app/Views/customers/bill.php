@@ -31,8 +31,9 @@ $dueDate = preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $oldBillDate)
         <p class="flex items-center gap-1.5 truncate text-sm font-bold text-slate-800"><?= ui_icon('users', 'h-4 w-4') ?> <?= e($customer['name']) ?></p>
       </div>
       <div class="text-right">
-        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Current Outstanding</p>
-        <p class="text-lg font-bold <?= $customer['outstanding_due'] > 0 ? 'text-red-600' : 'text-green-600' ?>">Rs. <?= number_format($customer['outstanding_due'], 0) ?></p>
+        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide"><?= $customer['outstanding_due'] < 0 ? 'Available Customer Credit' : 'Current Outstanding' ?></p>
+        <p class="text-lg font-bold <?= $customer['outstanding_due'] > 0 ? 'text-red-600' : 'text-green-600' ?>">Rs. <?= number_format(abs($customer['outstanding_due']), 0) ?></p>
+        <?php if ($customer['outstanding_due'] < 0): ?><p class="text-xs text-green-600">Applied automatically to this bill.</p><?php endif; ?>
       </div>
     </div>
     

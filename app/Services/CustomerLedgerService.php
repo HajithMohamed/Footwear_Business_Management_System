@@ -7,9 +7,11 @@ use App\Core\Database;
 /** Rebuild running balances after an authorised correction to a ledger record. */
 class CustomerLedgerService
 {
+    public function __construct(private ?Database $database = null) {}
+
     public function recalculate(int $customerId): float
     {
-        $db = Database::instance();
+        $db = $this->database ?? Database::instance();
         $rows = $db->all(
             'SELECT id, transaction_type, amount
                FROM customer_transactions

@@ -63,7 +63,7 @@ class CustomerTransaction extends Model
     public function currentBalance(int $customerId): float
     {
         $result = $this->db()->first(
-            'SELECT running_balance FROM customer_transactions WHERE customer_id = ? ORDER BY created_at DESC, id DESC LIMIT 1',
+            'SELECT running_balance FROM customer_transactions WHERE customer_id = ? ORDER BY COALESCE(transaction_date, DATE(created_at)) DESC, created_at DESC, id DESC LIMIT 1',
             [$customerId]
         );
         return (float)($result['running_balance'] ?? 0);

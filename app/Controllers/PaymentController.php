@@ -119,9 +119,6 @@ class PaymentController extends Controller
         }
 
         $total = round(array_sum(array_column($entries, 'amount')), 2);
-        if ($total > (float) $customer['outstanding_due']) {
-            $this->paymentError($customerId, 'The payment total cannot be more than the current outstanding balance.');
-        }
 
         $result = Database::instance()->transaction(function () use (
             $customerId, $entries, $method, $paymentDate, $customerModel, $total
@@ -130,8 +127,8 @@ class PaymentController extends Controller
                 'SELECT outstanding_due FROM customers WHERE id = ? FOR UPDATE',
                 [$customerId]
             );
-            if (!$locked || $total > (float) $locked['outstanding_due']) {
-                throw new \RuntimeException('The outstanding balance changed. Please review and try again.');
+            if (!$locked) {
+                throw new \RuntimeException('Customer is no longer available.');
             }
 
             $balance = (float) $locked['outstanding_due'];
@@ -168,7 +165,9 @@ class PaymentController extends Controller
                 ]);
                 $records[] = ['payment_id' => $paymentId, 'cheque_id' => $chequeId, 'image' => $entry['image']];
             }
-            $customerModel->updateOutstanding($customerId, $balance);
+            // A negative balance is prepaid customer credit. Rebuild in date order
+            // so backdated payments and later bills retain the same net credit.
+            $balance = (new CustomerLedgerService())->recalculate($customerId);
             return ['records' => $records, 'remaining' => $balance];
         });
 
@@ -226,12 +225,6 @@ class PaymentController extends Controller
         $notes = trim((string) $request->input('notes')) ?: null;
         if ($amount <= 0 || !$date) {
             Session::flash('error', 'A valid payment date and amount greater than zero are required.');
-            Session::flashInput($request->all());
-            $this->redirect("payments/{$paymentId}/edit");
-        }
-        $maximum = round((float) $payment['running_balance'] + (float) $payment['amount'], 2);
-        if ($amount > $maximum) {
-            Session::flash('error', 'The corrected payment cannot be more than the balance that was available before this payment.');
             Session::flashInput($request->all());
             $this->redirect("payments/{$paymentId}/edit");
         }

@@ -63,6 +63,9 @@ return function (Router $r): void {
     $r->post('/customers/{id}/restore','CustomerController@restore',['auth', 'admin']);
 
     // --- Manual customer bills (credit tracking only) -----------------------
+    $r->get('/customer-records/{id}/edit', 'CustomerRecordController@edit', ['auth']);
+    $r->post('/customer-records/{id}', 'CustomerRecordController@update', ['auth']);
+    $r->post('/customer-records/{id}/delete', 'CustomerRecordController@destroy', ['auth', 'admin']);
     $r->get('/bills',                               'CustomerBillController@selectCustomer', ['auth']);
     $r->get('/bills/{id}/edit',                    'CustomerBillController@edit', ['auth']);
     $r->get('/bills/{id}/receipt',                  'CustomerBillController@receipt', ['auth']);

@@ -93,7 +93,7 @@
             $statusClass = 'status-neutral';
         }
         
-        $creditUsed = $c['credit_limit'] > 0 ? min(100, round(($outstanding / $c['credit_limit']) * 100)) : 0;
+        $creditUsed = $c['credit_limit'] > 0 ? max(0, min(100, round(($outstanding / $c['credit_limit']) * 100))) : 0;
       ?>
       <div class="card overflow-hidden relative <?= !empty($c['deleted_at']) ? 'opacity-60' : '' ?> cursor-pointer hover:border-brand-300 transition-colors"
            onclick="window.location='<?= e(url("customers/{$c['id']}")) ?>'">
@@ -112,9 +112,9 @@
         <!-- Middle row: Finances -->
         <div class="flex justify-between items-end mb-4">
           <div>
-            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-0.5">Outstanding</p>
+            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-0.5"><?= $outstanding < 0 ? 'Customer Credit' : 'Outstanding' ?></p>
             <p class="text-lg font-bold <?= $outstanding > 0 ? 'text-amber-600' : 'text-slate-800' ?>">
-              Rs. <?= number_format($outstanding, 0) ?>
+              Rs. <?= number_format(abs($outstanding), 0) ?>
             </p>
           </div>
           <div class="text-right">

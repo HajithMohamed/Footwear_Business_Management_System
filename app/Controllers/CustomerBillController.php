@@ -121,7 +121,8 @@ class CustomerBillController extends Controller
                 'description' => 'Manual bill #' . $billNumber . ($notes !== '' ? ' - ' . $notes : ''),
                 'created_by' => Auth::id(),
             ]);
-            $customerModel->updateOutstanding($customerId, $newOutstanding);
+            // Existing credit offsets this bill; unused credit carries forward.
+            (new CustomerLedgerService())->recalculate($customerId);
             return $id;
         });
 

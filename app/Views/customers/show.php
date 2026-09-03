@@ -51,8 +51,9 @@
 <div class="hero-card hero-card-primary mb-5">
   <div class="flex justify-between items-start mb-6">
     <div>
-      <p class="text-[10px] font-bold text-brand-200 uppercase tracking-wide">Outstanding Balance</p>
-      <p class="text-3xl font-bold mt-1">Rs. <?= number_format($outstanding, 0) ?></p>
+      <p class="text-[10px] font-bold text-brand-200 uppercase tracking-wide"><?= $outstanding < 0 ? 'Customer Credit' : 'Outstanding Balance' ?></p>
+      <p class="text-3xl font-bold mt-1">Rs. <?= number_format(abs($outstanding), 0) ?></p>
+      <?php if ($outstanding < 0): ?><p class="mt-1 text-xs text-brand-200">Automatically applied to upcoming bills.</p><?php endif; ?>
     </div>
     <div class="text-right">
       <span class="status-badge <?= $statusClass ?> !bg-white/20 !text-white !border-none">
@@ -186,6 +187,7 @@
           <?php 
             $isDebit = $txn['transaction_type'] === 'sale';
             $isCredit = in_array($txn['transaction_type'], ['payment', 'credit_memo']);
+            $signedAmount = ($isCredit ? -1 : 1) * (float) $txn['amount'];
             $dotClass = $isDebit ? 'timeline-dot-sale' : ($isCredit ? 'timeline-dot-payment' : 'timeline-dot-adjustment');
             $ref = $txn['bill_number'] ?? $txn['reference_id'] ?? ucwords(str_replace('_', ' ', $txn['transaction_type']));
           ?>
@@ -198,8 +200,8 @@
                   <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide"><?= date('d M Y, h:i A', strtotime($txn['transaction_date'] ?? $txn['created_at'])) ?></p>
                 </div>
                 <div class="text-right">
-                  <p class="text-sm font-bold <?= $isDebit ? 'text-slate-800' : 'text-green-600' ?>">
-                    <?= $isDebit ? '+' : '-' ?> Rs. <?= number_format($txn['amount'], 0) ?>
+                  <p class="text-sm font-bold <?= $signedAmount >= 0 ? 'text-slate-800' : 'text-green-600' ?>">
+                    <?= $signedAmount >= 0 ? '+' : '-' ?> Rs. <?= number_format(abs($signedAmount), 0) ?>
                   </p>
                   <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide mt-0.5">Bal: Rs. <?= number_format($txn['running_balance'], 0) ?></p>
                 </div>
@@ -213,11 +215,7 @@
                   <?php if (!empty($txn['cheque_image_path'])): ?><a href="<?= e(StorageService::url($txn['cheque_image_path'])) ?>" target="_blank" class="mt-1 inline-flex items-center gap-1.5 font-bold text-amber-900"><?= ui_icon('image', 'h-4 w-4') ?> Cheque image available</a><?php endif; ?>
                 </div>
               <?php endif; ?>
-              <?php if (($txn['reference_type'] ?? '') === 'manual_bill'): ?>
-                <a href="<?= e(url('bills/' . $txn['id'] . '/edit')) ?>" class="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-brand-600"><?= ui_icon('pencil', 'h-4 w-4') ?> Edit bill details</a>
-              <?php elseif (($txn['reference_type'] ?? '') === 'payment' && !empty($txn['reference_id'])): ?>
-                <a href="<?= e(url('payments/' . $txn['reference_id'] . '/edit')) ?>" class="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-brand-600"><?= ui_icon('pencil', 'h-4 w-4') ?> Edit payment details</a>
-              <?php endif; ?>
+              <?php require __DIR__ . '/record-actions.php'; ?>
             </div>
           </div>
         <?php endforeach; ?>
@@ -236,11 +234,13 @@
               <th class="px-4 py-3 font-bold text-slate-500 uppercase tracking-wide text-right">Debit</th>
               <th class="px-4 py-3 font-bold text-slate-500 uppercase tracking-wide text-right">Credit</th>
               <th class="px-4 py-3 font-bold text-slate-500 uppercase tracking-wide text-right">Balance</th>
+              <th class="px-4 py-3 font-bold text-slate-500 uppercase tracking-wide">Actions</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
             <?php if (!empty($transactions)): ?>
               <?php foreach ($transactions as $txn): ?>
+                <?php $signedAmount = (in_array($txn['transaction_type'], ['payment', 'credit_memo'], true) ? -1 : 1) * (float) $txn['amount']; ?>
                 <tr class="hover:bg-slate-50 transition">
                   <td class="px-4 py-3">
                     <span class="block font-bold text-slate-800"><?= date('d M Y', strtotime($txn['transaction_date'] ?? $txn['created_at'])) ?></span>
@@ -249,18 +249,19 @@
                     </span>
                   </td>
                   <td class="px-4 py-3 text-right font-bold text-slate-700">
-                    <?= $txn['transaction_type'] === 'sale' ? number_format($txn['amount'], 0) : '—' ?>
+                    <?= $signedAmount > 0 ? number_format($signedAmount, 0) : '—' ?>
                   </td>
                   <td class="px-4 py-3 text-right font-bold text-green-600">
-                    <?= in_array($txn['transaction_type'], ['payment', 'credit_memo']) ? number_format($txn['amount'], 0) : '—' ?>
+                    <?= $signedAmount < 0 ? number_format(abs($signedAmount), 0) : '—' ?>
                   </td>
                   <td class="px-4 py-3 text-right font-bold <?= $txn['running_balance'] > 0 ? 'text-amber-600' : 'text-slate-800' ?>">
                     <?= number_format($txn['running_balance'], 0) ?>
                   </td>
+                  <td class="px-4 py-3"><?php require __DIR__ . '/record-actions.php'; ?></td>
                 </tr>
               <?php endforeach; ?>
             <?php else: ?>
-              <tr><td colspan="4" class="p-6 text-center text-slate-500">No ledger entries found.</td></tr>
+              <tr><td colspan="5" class="p-6 text-center text-slate-500">No ledger entries found.</td></tr>
             <?php endif; ?>
           </tbody>
         </table>
