@@ -401,9 +401,16 @@ class ProductController extends Controller
                 Session::flash('error', $error);
                 continue;
             }
-            $stored = $storage->storeProductImage($file, $productId);
-            $stored['colour'] = $colour !== '' ? $colour : null;
-            $this->products->addImage($productId, $stored);
+            try {
+                \App\Core\Database::instance()->transaction(function () use ($storage, $file, $productId, $colour): void {
+                    $stored = $storage->storeProductImage($file, $productId);
+                    $stored['colour'] = $colour !== '' ? $colour : null;
+                    $this->products->addImage($productId, $stored);
+                });
+            } catch (\Throwable $e) {
+                error_log('Product photo upload failed: ' . $e->getMessage());
+                Session::flash('error', 'Product saved, but a photo could not be saved. Please upload the photo again.');
+            }
         }
     }
 }

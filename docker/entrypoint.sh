@@ -44,4 +44,8 @@ mkdir -p storage/logs storage/backups public/uploads
 chown -R www-data:www-data storage public/uploads .env 2>/dev/null || true
 chmod -R 0775 storage public/uploads 2>/dev/null || true
 
+# Fail startup if the required tables cannot be prepared, rather than serving
+# customer pages with an incomplete schema.
+php scripts/upgrade-runtime.php
+
 exec apache2-foreground

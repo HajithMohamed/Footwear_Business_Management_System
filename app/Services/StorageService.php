@@ -25,6 +25,9 @@ class StorageService
     /** Web URL for a stored relative path. */
     public static function url(string $relativePath): string
     {
+        if (ProductMedia::validPath($relativePath)) {
+            return url('product-media?path=' . rawurlencode($relativePath));
+        }
         return url('uploads/' . ltrim($relativePath, '/'));
     }
 
@@ -35,6 +38,16 @@ class StorageService
             if (!$relativePath) continue;
             $relativePath = ltrim(str_replace('\\', '/', $relativePath), '/');
             if (str_contains($relativePath, '..')) continue;
+            if (ProductMedia::validPath($relativePath)) {
+                $media = new ProductMedia();
+                if ($media->exists($relativePath)) return self::url($relativePath);
+                // Preserve legacy photos while their original server still has them.
+                if (is_file(BASE_PATH . '/public/uploads/' . $relativePath)) {
+                    $media->store($relativePath, BASE_PATH . '/public/uploads/' . $relativePath);
+                    return self::url($relativePath);
+                }
+                continue;
+            }
             if (is_file(BASE_PATH . '/public/uploads/' . $relativePath)) {
                 return self::url($relativePath);
             }
@@ -92,6 +105,12 @@ class StorageService
             move_uploaded_file($file['tmp_name'], $this->diskRoot . '/' . $origPath)
                 || copy($file['tmp_name'], $this->diskRoot . '/' . $origPath);
             $thumbPath = $origPath;
+        }
+
+        // Do not report a successful upload until both copies are durable.
+        $media = new ProductMedia();
+        foreach (array_unique([$origPath, $thumbPath]) as $path) {
+            $media->store($path, $this->diskRoot . '/' . $path);
         }
 
         return [
@@ -250,6 +269,7 @@ class StorageService
             if (!$rel) {
                 continue;
             }
+            (new ProductMedia())->delete($rel);
             $full = $this->diskRoot . '/' . ltrim($rel, '/');
             if (is_file($full)) {
                 @unlink($full);

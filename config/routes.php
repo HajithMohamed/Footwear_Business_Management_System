@@ -30,6 +30,7 @@ return function (Router $r): void {
     $r->post('/calculator', 'CalculatorController@calculate', ['auth']);
 
     // --- Products ------------------------------------------------------------
+    $r->get('/product-media', 'ProductMediaController@show', ['auth']);
     $r->get('/products',              'ProductController@index',  ['auth']);
     $r->get('/products/create',       'ProductController@create', ['auth']);
     $r->post('/products',             'ProductController@store',  ['auth']);
