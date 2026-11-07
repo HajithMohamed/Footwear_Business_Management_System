@@ -1,11 +1,35 @@
 # Shoe Bank — Wholesale Footwear Management
 
+[![CI](https://github.com/HajithMohamed/Footwear_Business_Management_System/actions/workflows/ci.yml/badge.svg?branch=Development)](https://github.com/HajithMohamed/Footwear_Business_Management_System/actions/workflows/ci.yml)
+![PHP 8.1+](https://img.shields.io/badge/PHP-8.1%2B-777BB4?logo=php&logoColor=white)
+![MySQL](https://img.shields.io/badge/MySQL%20%2F%20MariaDB-4479A1?logo=mysql&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)
+
 Mobile-first inventory, import-clearance, credit-sales and reporting system for a Sri Lankan
 wholesale footwear shop. Built to run cheaply on cPanel shared hosting.
 
-**Stack:** PHP 8.1+ · MySQL/MariaDB · Tailwind CSS + Alpine.js (CDN, no build step) · custom lightweight MVC (no Composer required).
+**Stack:** PHP 8.1+ · MySQL/MariaDB · Tailwind CSS (compiled with the Tailwind CLI) and Alpine.js · custom lightweight MVC (no Composer required).
 
-See [`MASTER_PROMPT.md`](MASTER_PROMPT.md) for the full product spec and the phased build plan.
+<!-- Add the live demo link and a read-only demo login here once the production admin password has been changed. -->
+
+![Import cost calculator: landed cost per pair from the Indian price, discount, exchange rate and clearance per kg, with the secret cost code and a suggested selling price](docs/screenshots/cost-calculator.png)
+
+## At a glance
+
+| | |
+| --- | --- |
+| **What it is** | The day-to-day system of a wholesale shoe shop: products and stock, import purchases and clearance, credit sales, customer payments and cheques, expenses, and profit and cash reports |
+| **Hardest problem** | Keeping profit and cash honest. Stock purchases are not expenses, a sale with no landed cost has *no* profit rather than zero, a cheque counts only once it clears, and cost of goods is snapshotted onto each invoice (see "How the money adds up") |
+| **Architecture** | A custom MVC with no framework: 27 controllers, 24 models and 17 services behind one front controller (`public/index.php`) |
+| **Security** | PDO prepared statements with emulation off, a central CSRF check in the router, bcrypt with automatic rehashing, shell-safe OCR calls and an `.htaccess` that blocks script execution in uploads |
+| **Tests and CI** | A dependency-free test runner (`php tests/run.php`): 10 test files, 148 assertions. GitHub Actions lints every PHP file and runs the tests on PHP 8.1 and 8.3 |
+| **Deployment** | Docker (PHP-Apache + MySQL 8) for local use, and a Render web service with an external MySQL database ([DEPLOYMENT.md](DEPLOYMENT.md)) |
+
+| Customers and credit | On a phone | |
+| --- | --- | --- |
+| ![Customer directory with credit limits, outstanding balances and quick actions for bills, payments, calls and WhatsApp](docs/screenshots/customers.png) | ![Mobile dashboard with today's bills, collections, outstanding credit and quick actions](docs/screenshots/mobile-dashboard.png) | ![The cost calculator on a phone](docs/screenshots/mobile-calculator.png) |
+
+_Screenshots use the seed data from `database/seed.sql`._
 
 ---
 
@@ -139,7 +163,9 @@ php scripts/create-admin.php admin "a-new-password" "Shop Owner"
 
 ## Run the tests
 
-The cost-calculation logic ships with a dependency-free test suite:
+A dependency-free test suite (no PHPUnit) covers landed costing, customer intelligence and
+statements, flexible article transactions, arrival grouping, OCR parsing, phone numbers, product
+media and size sets:
 
 ```bash
 php tests/run.php
@@ -176,14 +202,15 @@ config/         config.php, routes.php
 database/       schema.sql, seed.sql, migrations/
 public/         index.php (front controller), .htaccess, assets/, uploads/ (protected)
 scripts/        create-admin.php
-tests/          run.php + CostCalculatorTest.php + CustomerIntelligenceTest.php
+tests/          run.php + 10 *Test.php files (148 assertions)
 storage/        logs/, backups/
 ```
 
 ## Notes
 
-- **Tailwind via CDN** keeps the build step at zero. For production you can switch to the
-  Tailwind CLI to ship a smaller stylesheet, but it is not required.
+- **Tailwind** is compiled with the Tailwind CLI into `public/assets/css/tailwind.css`, which is
+  committed, so the app runs without Node.js. After changing classes in the views, rebuild it with
+  `npm ci && npm run build:css` (the Docker image does this automatically).
 - **Rounding rule:** costs round to the nearest Rs.25 (round-half-up). The owner's `738 → 725`
   example is inconsistent with that and is treated as a value to confirm — change the rule in one
   place: `App\Services\CostCalculator::roundToStep()` (step is also configurable in Settings).
